@@ -8,6 +8,11 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 
 ---
 
+
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ca699c80-1d41-42b7-be1d-5d466bf31429" />
+
+
+
 ## 한국어
 
 ### 주요 기능
