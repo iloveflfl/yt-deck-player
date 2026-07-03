@@ -237,7 +237,11 @@ function appBarEdgeForMode(mode) {
 }
 
 function appBarHelperPath() {
-  return path.join(__dirname, 'appbar-helper.ps1');
+  const raw = path.join(__dirname, 'appbar-helper.ps1');
+  // In a packaged app __dirname points inside app.asar, which powershell.exe
+  // cannot read. electron-builder unpacks the helper (asarUnpack) next to the
+  // archive, so hand PowerShell that real on-disk path instead.
+  return raw.includes(`app.asar${path.sep}`) ? raw.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`) : raw;
 }
 
 function appBarTempPaths() {
