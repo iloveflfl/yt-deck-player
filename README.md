@@ -1,6 +1,8 @@
 # YT Deck Player
 
-<center><img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/87ac1ba6-47ca-423e-8027-ef8cc557f5da" /></center>
+<center>
+  <img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/87ac1ba6-47ca-423e-8027-ef8cc557f5da" />
+</center>
 
 
 유튜브를 데스크톱 한 켠의 "오디오 덱"으로 쓰는 Electron 앱입니다. 화면 가장자리에 도킹되는 프레임리스 플레이어에 플레이리스트를 칩(chip)으로 올려두고, 작업하면서 BGM처럼 재생합니다.
