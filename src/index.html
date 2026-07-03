@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>YT Deck Player</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="deck-shell">
+    <div class="deck-topline" data-drag-zone>
+      <div class="brand"><span class="brand-dot"></span> YT Deck Player <span class="version-pill">v2.8</span><button id="themeBtn" class="tiny-btn theme-chip" title="테마 순환"><span class="theme-ico" aria-hidden="true">◐</span><span>Theme:Aurora</span></button></div>
+      <div class="top-actions">
+        <span id="deckClock" class="clock-pill" title="현재 시각">--:--</span>
+        <span id="statusText" class="status-pill">READY</span>
+        <button id="langBtn" class="tiny-btn" title="언어 전환">한/EN</button>
+        <button id="dockBtn" class="tiny-btn" title="독 위치 전환">DOCK</button>
+        <button id="reserveBtn" class="tiny-btn active" title="다른 창이 YT Deck 영역을 침범하지 않게 작업영역을 예약">SPACE</button>
+        <button id="pinBtn" class="tiny-btn active" title="항상 위 토글">PIN</button>
+        <button id="minBtn" class="tiny-btn" title="최소화">MIN</button>
+        <button id="closeBtn" class="tiny-btn danger" title="닫기">X</button>
+      </div>
+    </div>
+
+    <main class="deck-main">
+      <section class="preview-panel" aria-label="YouTube preview">
+        <div id="player" class="youtube-frame"></div>
+        <div id="previewFallback" class="preview-fallback">
+          <div class="fallback-mark">YT</div>
+          <span>DROP CHIP</span>
+        </div>
+      </section>
+
+      <section class="center-panel" aria-label="Now playing controls">
+        <div class="track-row">
+          <div class="track-meta">
+            <div id="trackTitle" class="track-title" data-i18n="emptyTitle">온보드에 플레이리스트 칩을 올려두세요</div>
+            <div id="trackSub" class="track-sub" data-i18n="emptySub">링크를 추가하거나 유튜브에서 드래그해 넣을 수 있습니다</div>
+          </div>
+          <div class="time-box"><span id="currentTime">0:00</span><span>/</span><span id="durationTime">0:00</span></div>
+        </div>
+
+        <div class="progress-wrap" id="progressWrap" title="클릭해서 이동">
+          <div id="progressFill" class="progress-fill"></div>
+          <div id="progressKnob" class="progress-knob"></div>
+        </div>
+
+        <div class="control-row">
+          <button id="prevBtn" class="deck-btn icon-btn" title="이전 곡"></button>
+          <button id="playBtn" class="deck-btn primary icon-btn" title="재생/일시정지"></button>
+          <button id="nextBtn" class="deck-btn icon-btn" title="다음 곡"></button>
+          <button id="shuffleBtn" class="mode-btn icon-mode" title="Off -> Bag -> Chaos">SHUFFLE OFF</button>
+          <button id="loopBtn" class="mode-btn active icon-mode">LOOP</button>
+          <button id="bassBtn" class="mode-btn bass-btn" title="Bass Boost: IFrame 재생 엔진에서는 실제 DSP가 제한됩니다">BASS 0</button>
+          <div class="speed-stepper" title="배속 조정">
+            <span>SPD</span>
+            <button id="speedDownBtn" class="step-btn icon-step" title="배속 낮추기"></button>
+            <strong id="speedLabel">1x</strong>
+            <button id="speedUpBtn" class="step-btn icon-step" title="배속 높이기"></button>
+          </div>
+          <label class="vol-box" title="볼륨"><span class="inline-icon speaker-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 9.25v5.5h4.1l5.15 4.05V5.2L7.6 9.25H3.5Z"/><path d="M15.2 8.15a5.15 5.15 0 0 1 0 7.7" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/><path d="M17.9 5.35a8.95 8.95 0 0 1 0 13.3" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg></span><input id="volumeSlider" type="range" min="0" max="100" value="72" /></label>
+          <label class="opacity-box" title="불투명도"><span class="inline-icon opacity-icon" aria-hidden="true"></span><input id="opacitySlider" type="range" min="35" max="100" value="96" /></label>
+          <button id="controlSettingsBtn" class="gear-btn" title="컨트롤 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.28 7.28 0 0 0-1.69-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42L9.12 5.07c-.61.24-1.18.56-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.49.31.61.22l2.49-1c.51.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.61-.25 1.18-.58 1.69-.98l2.49 1c.23.08.48 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg></button>
+        </div>
+      </section>
+
+      <section class="chip-panel" aria-label="Playlist chips">
+        <div class="chip-zone onboard-zone" id="onBoardZone">
+          <div class="zone-head">
+            <span data-i18n="onBoard">ON BOARD</span>
+            <span id="poolCount" class="muted">0 tracks</span>
+          </div>
+          <div id="onBoardChips" class="chip-row onboard-row"></div>
+        </div>
+
+        <div class="chip-zone library-zone" id="libraryZone">
+          <div class="zone-head">
+            <span data-i18n="library">LIBRARY</span>
+            <div class="library-actions">
+              <button id="apiBtn" class="mini-action refresh-action" title="곡 목록 갱신">↻</button>
+              <button id="addBtn" class="mini-action accent link-action" title="링크 추가">🔗 링크</button>
+            </div>
+          </div>
+          <div id="libraryChips" class="chip-row library-row"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="contextMenu" class="context-menu hidden">
+      <button data-menu="toggleOnBoard">온보드 토글</button>
+      <button data-menu="rename">이름 변경</button>
+      <button data-menu="refresh">NO-KEY 새로고침</button>
+      <button data-menu="delete" class="danger-text">영구 삭제</button>
+    </div>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head">
+          <strong id="modalTitle">Add Playlist</strong>
+          <button id="modalClose" class="tiny-btn">X</button>
+        </div>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

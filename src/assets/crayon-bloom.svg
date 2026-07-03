@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="420" viewBox="0 0 260 420" fill="none">
+  <!-- crayon-drawn bloom frame: ornate wobbly mirror frame, bows, hearts, sparkles -->
+  <g stroke="#f06fa8" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M40 52 Q28 50 28 62 L26 350 Q26 364 40 362 L218 366 Q232 368 232 354 L234 62 Q234 50 222 52 Z" opacity=".85"/>
+    <path d="M48 64 Q40 63 40 72 L38 344 Q38 353 48 352 L210 355 Q220 356 220 347 L222 71 Q222 63 213 64 Z"
+          stroke-dasharray="12 8" opacity=".6" stroke="#e8b64c"/>
+  </g>
+  <!-- top ribbon bow -->
+  <g stroke="#f06fa8" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M130 34 Q112 20 104 32 Q98 42 116 44 Q126 45 130 34 Z"/>
+    <path d="M130 34 Q148 20 156 32 Q162 42 144 44 Q134 45 130 34 Z"/>
+    <path d="M120 46 Q116 58 108 64 M140 46 Q144 58 152 64" stroke="#7cc3ea"/>
+    <circle cx="130" cy="37" r="4" fill="#f06fa8"/>
+  </g>
+  <!-- corner hearts -->
+  <g fill="#f06fa8" opacity=".9">
+    <path d="M34 30 c-3-6-12-4-12 2 c0 5 8 9 12 12 c4-3 12-7 12-12 c0-6-9-8-12-2 Z"/>
+    <path d="M226 30 c-3-6-12-4-12 2 c0 5 8 9 12 12 c4-3 12-7 12-12 c0-6-9-8-12-2 Z"/>
+    <path d="M34 380 c-3-6-12-4-12 2 c0 5 8 9 12 12 c4-3 12-7 12-12 c0-6-9-8-12-2 Z"/>
+    <path d="M226 380 c-3-6-12-4-12 2 c0 5 8 9 12 12 c4-3 12-7 12-12 c0-6-9-8-12-2 Z"/>
+  </g>
+  <!-- gold frame flourish -->
+  <g stroke="#e8b64c" stroke-width="3" stroke-linecap="round" fill="none" opacity=".85">
+    <path d="M92 366 Q110 380 130 372 Q150 380 168 366"/>
+    <path d="M92 50 Q110 38 130 46 Q150 38 168 50"/>
+  </g>
+  <!-- sparkles -->
+  <g fill="#e8b64c">
+    <path d="M54 110 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z"/>
+    <path d="M204 150 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 Z"/>
+    <path d="M130 392 l2.6 7 7 2.6 -7 2.6 -2.6 7 -2.6 -7 -7 -2.6 7 -2.6 Z" fill="#f06fa8"/>
+    <circle cx="60" cy="300" r="3.2" fill="#7cc3ea"/>
+    <circle cx="206" cy="286" r="3.2" fill="#7cc3ea"/>
+  </g>
+  <!-- crayon track marks -->
+  <g stroke="#f06fa8" stroke-width="4" stroke-linecap="round" opacity=".7">
+    <path d="M40 411 L74 411"/>
+    <path d="M186 411 L220 411" stroke="#7cc3ea"/>
+  </g>
+</svg>

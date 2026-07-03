@@ -1,0 +1,49 @@
+{
+  "name": "yt-deck-player",
+  "version": "2.8.0",
+  "description": "Responsive frameless YouTube tabletop audio deck v2.8 with Crayon Pastel theme trio, brighter light themes, smoother continuous progress interpolation, rewind-on-end animation, theme chip, pin icon, and polished media controls.",
+  "main": "src/main.js",
+  "author": "YT Deck Player v2.3",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check": "node scripts/check.js",
+    "pack:win": "electron-builder --win portable",
+    "dist:win": "electron-builder --win"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "local.ytdeckplayer.app",
+    "productName": "YT Deck Player",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "artifactName": "YTDeckPlayer-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "YTDeckPlayer-${version}-setup.exe"
+    },
+    "asarUnpack": [
+      "src/appbar-helper.ps1"
+    ]
+  }
+}

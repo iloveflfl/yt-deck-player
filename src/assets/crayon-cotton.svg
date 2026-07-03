@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="420" viewBox="0 0 260 420" fill="none">
+  <!-- crayon-drawn cotton frame: night + bloom blend, clouds, moon-and-heart, sparkles -->
+  <g stroke="#8a8fe0" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M38 48 Q28 46 27 56 L26 354 Q26 366 38 365 L218 368 Q232 369 231 356 L233 58 Q234 47 222 48 Z"
+          stroke-dasharray="14 9" opacity=".85"/>
+  </g>
+  <!-- corner curls: alternating pink / periwinkle -->
+  <g stroke-width="3" stroke-linecap="round" fill="none" opacity=".85">
+    <path d="M28 48 Q14 42 16 28 Q17 18 27 20" stroke="#f592b8"/>
+    <path d="M231 48 Q245 42 243 28 Q242 18 232 20" stroke="#8a8fe0"/>
+    <path d="M28 366 Q14 372 16 386 Q17 396 27 394" stroke="#8a8fe0"/>
+    <path d="M231 366 Q245 372 243 386 Q242 396 232 394" stroke="#f592b8"/>
+  </g>
+  <!-- crescent moon holding a heart -->
+  <path d="M118 22 a12 12 0 1 0 10 19 a10 10 0 1 1 -10 -19 Z" fill="#f2c94c" opacity=".95"/>
+  <path d="M146 28 c-2.4-5-10-3.4-10 1.6 c0 4.2 6.6 7.6 10 10 c3.4-2.4 10-5.8 10-10 c0-5-7.6-6.6-10-1.6 Z" fill="#f592b8"/>
+  <!-- cotton clouds -->
+  <g stroke="#8a8fe0" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8">
+    <path d="M48 330 Q52 318 64 320 Q68 308 82 312 Q94 306 100 318 Q112 318 110 330"/>
+    <path d="M150 344 Q154 334 164 336 Q168 326 180 330 Q190 326 194 336 Q204 336 202 346"/>
+  </g>
+  <!-- sparkles -->
+  <g>
+    <path d="M56 104 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z" fill="#f2c94c"/>
+    <path d="M204 140 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 Z" fill="#f592b8"/>
+    <path d="M206 306 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 Z" fill="#8a8fe0"/>
+    <circle cx="46" cy="210" r="2.8" fill="#8a8fe0"/>
+    <circle cx="214" cy="230" r="2.8" fill="#f592b8"/>
+  </g>
+  <!-- music note doodle -->
+  <g stroke="#f592b8" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M186 388 L186 406 M186 388 L196 385 L196 403"/>
+    <circle cx="182" cy="407" r="4.5" fill="#f592b8"/>
+    <circle cx="192" cy="404" r="4.5" fill="#f592b8"/>
+  </g>
+  <!-- crayon track marks -->
+  <g stroke="#8a8fe0" stroke-width="4" stroke-linecap="round" opacity=".7">
+    <path d="M40 411 L74 411"/>
+    <path d="M108 411 L152 411" stroke="#f2c94c"/>
+  </g>
+</svg>

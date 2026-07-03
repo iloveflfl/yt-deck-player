@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="420" viewBox="0 0 260 420" fill="none">
+  <!-- crayon-drawn night frame: wobbly dashed border, moon phases, sparkles -->
+  <g stroke="#f7dc5c" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M38 46 Q30 44 28 54 L26 356 Q26 368 38 367 L218 370 Q231 371 231 358 L233 56 Q234 45 222 46 Z"
+          stroke-dasharray="14 9" opacity=".9"/>
+    <path d="M46 60 L212 60" stroke-dasharray="3 10" opacity=".55"/>
+    <path d="M46 352 L212 352" stroke-dasharray="3 10" opacity=".55"/>
+  </g>
+  <!-- corner curls -->
+  <g stroke="#f7dc5c" stroke-width="3" stroke-linecap="round" fill="none" opacity=".85">
+    <path d="M28 46 Q14 40 16 26 Q17 16 27 18"/>
+    <path d="M231 46 Q245 40 243 26 Q242 16 232 18"/>
+    <path d="M28 368 Q14 374 16 388 Q17 398 27 396"/>
+    <path d="M231 368 Q245 374 243 388 Q242 398 232 396"/>
+  </g>
+  <!-- crescent moon -->
+  <path d="M130 20 a11 11 0 1 0 9 17 a9 9 0 1 1 -9 -17 Z" fill="#f7dc5c" opacity=".95"/>
+  <!-- moon phase row (like a phase indicator) -->
+  <g transform="translate(96,392)">
+    <circle cx="0" cy="0" r="7" stroke="#f7dc5c" stroke-width="2.5" fill="none"/>
+    <path d="M34 -7 a7 7 0 0 1 0 14 Z" fill="#f7dc5c"/>
+    <circle cx="68" cy="0" r="7" fill="#f7dc5c"/>
+  </g>
+  <!-- sparkles -->
+  <g fill="#fdf3c0">
+    <path d="M52 96 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 Z"/>
+    <path d="M206 132 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 Z"/>
+    <path d="M60 300 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 Z"/>
+    <circle cx="200" cy="308" r="3.4"/>
+    <circle cx="44" cy="196" r="2.6"/>
+    <circle cx="216" cy="224" r="2.6"/>
+  </g>
+  <!-- music note doodle -->
+  <g stroke="#ff9d5c" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M186 30 L186 48 M186 30 L196 27 L196 45"/>
+    <circle cx="182" cy="49" r="4.5" fill="#ff9d5c"/>
+    <circle cx="192" cy="46" r="4.5" fill="#ff9d5c"/>
+  </g>
+  <!-- crayon track marks -->
+  <g stroke="#f7dc5c" stroke-width="4" stroke-linecap="round" opacity=".7">
+    <path d="M40 411 L74 411" />
+    <path d="M186 411 L220 411" stroke="#ff9d5c"/>
+  </g>
+</svg>
