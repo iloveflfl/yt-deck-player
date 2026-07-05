@@ -1135,6 +1135,31 @@ function collectPlaylistTracks(root, seen, tracks, continuations, continuationSe
       tracks.push({ videoId, title, channel, thumbnail: thumb, duration });
     }
 
+    // 2026+ playlist pages replaced playlistVideoRenderer with lockupViewModel
+    // (contentId instead of videoId). Without this branch the structured route
+    // finds 0 tracks and imports silently degrade to the capped regex/RSS
+    // fallbacks (e.g. 57 of 378 tracks).
+    if (key === 'lockupViewModel' && value && value.contentId) {
+      if (value.contentType && value.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return;
+      const videoId = value.contentId;
+      if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId) || seen.has(videoId)) return;
+      const title = value.metadata?.lockupMetadataViewModel?.title?.content || videoId;
+      if (/^(Deleted video|Private video|\[Deleted video\]|\[Private video\])$/i.test(title)) return;
+      seen.add(videoId);
+      const sources = value.contentImage?.thumbnailViewModel?.image?.sources;
+      const thumb = (Array.isArray(sources) && sources.length
+        ? [...sources].sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url
+        : '') || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      let durationText = '';
+      walk(value.contentImage || {}, (k, v) => {
+        if (!durationText && k === 'thumbnailBadgeViewModel' && typeof v?.text === 'string' && /^\d+(?::\d+)+$/.test(v.text.trim())) {
+          durationText = v.text.trim();
+        }
+      });
+      const channel = value.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content || '';
+      tracks.push({ videoId, title, channel, thumbnail: thumb, duration: parseDuration(durationText) });
+    }
+
     if (key === 'continuationCommand' && value?.token) {
       if (!continuationSeen.has(value.token)) {
         continuationSeen.add(value.token);
