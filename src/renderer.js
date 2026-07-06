@@ -98,6 +98,20 @@ const I18N = {
     ctSaveAsNew: '새 테마로 저장',
     ctEmpty: '저장된 커스텀 테마가 없습니다.',
     ctRightClickHint: '우클릭: 커스텀 테마 편집',
+    timeCard: '시간',
+    timerLabel: '타이머',
+    alarmLabel: '알람',
+    timerStart: '시작',
+    timerPause: '일시정지',
+    timerResume: '재개',
+    timerDone: '타이머 종료 — 시계를 클릭해 해제하세요',
+    alarmDone: '알람 시각입니다 — 시계를 클릭해 해제하세요',
+    alarmSetBtn: '설정',
+    alarmClearBtn: '해제',
+    alarmSilentHelp: '소리 없이 색으로만 알립니다',
+    alarmFiredTip: '클릭해서 알람 해제',
+    clockTitle: '시계 · 클릭: 타이머/알람',
+    minShort: '분',
   },
   en: {
     emptyTitle: 'Build your YouTube audio deck with links or chips',
@@ -185,6 +199,20 @@ const I18N = {
     ctSaveAsNew: 'Save as new',
     ctEmpty: 'No saved custom themes yet.',
     ctRightClickHint: 'Right-click: edit custom theme',
+    timeCard: 'Time',
+    timerLabel: 'Timer',
+    alarmLabel: 'Alarm',
+    timerStart: 'Start',
+    timerPause: 'Pause',
+    timerResume: 'Resume',
+    timerDone: 'Timer finished — click the clock to dismiss',
+    alarmDone: 'Alarm time — click the clock to dismiss',
+    alarmSetBtn: 'Set',
+    alarmClearBtn: 'Clear',
+    alarmSilentHelp: 'Color-only, no sound',
+    alarmFiredTip: 'Click to dismiss the alarm',
+    clockTitle: 'Clock · click for timer & alarm',
+    minShort: 'min',
   },
 };
 
@@ -279,6 +307,7 @@ const defaultState = {
     progressKnobImage: '',
     progressKnobSize: 1,
     customThemes: [],
+    alarmTime: '',
   },
 };
 
@@ -2384,16 +2413,285 @@ function wireDropZone(zone, onDrop, effect = 'copy') {
   });
 }
 
+/* =========================================================================
+ * Deck Island — clock / timer / silent color alarm
+ * -------------------------------------------------------------------------
+ * The top-bar clock pill is a single "living capsule": idle it is a Braun-
+ * style HH:MM with a breathing colon (hover reveals seconds + weekday);
+ * while a timer runs it becomes a countdown with a progress ring; when the
+ * alarm fires the whole shell answers with a color choreography instead of
+ * sound: preheat (T-5m) -> bloom (3 gentle border breaths) -> afterglow
+ * (pill stays tinted until clicked). All colors come from theme CSS vars.
+ * ========================================================================= */
+let deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
+let alarmAt = 0;
+let alarmPhase = 'idle';
+let bloomUntil = 0;
+let afterglowLabel = '';
+
+function deckPillIcon(kind) {
+  if (kind === 'bell') return '<svg class="pill-ico" viewBox="0 0 24 24"><path d="M12 22a2.3 2.3 0 0 0 2.3-2.3H9.7A2.3 2.3 0 0 0 12 22Zm7-5.4v1H5v-1l1.7-1.7V10a5.3 5.3 0 0 1 3.8-5.1V4a1.5 1.5 0 0 1 3 0v.9A5.3 5.3 0 0 1 17.3 10v4.9L19 16.6Z"/></svg>';
+  if (kind === 'sun') return '<svg class="pill-ico" viewBox="0 0 24 24"><path d="M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm-1-15h2v3h-2V2Zm0 17h2v3h-2v-3ZM2 11h3v2H2v-2Zm17 0h3v2h-3v-2ZM4.2 5.6 5.6 4.2l2.1 2.1-1.4 1.4-2.1-2.1Zm12.1 12.1 1.4-1.4 2.1 2.1-1.4 1.4-2.1-2.1Zm2.1-13.5 1.4 1.4-2.1 2.1-1.4-1.4 2.1-2.1ZM6.3 16.3l1.4 1.4-2.1 2.1-1.4-1.4 2.1-2.1Z"/></svg>';
+  return '<svg class="pill-ico" viewBox="0 0 24 24"><path d="M20.6 14.5A8.6 8.6 0 0 1 9.5 3.4 8.6 8.6 0 1 0 20.6 14.5Z"/></svg>';
+}
+
+function timerRingSvg(remainFraction) {
+  const C = 2 * Math.PI * 8;
+  const off = Math.max(0, Math.min(C, C * (1 - remainFraction)));
+  return `<svg class="pill-ring" viewBox="0 0 20 20"><circle class="ring-bg" cx="10" cy="10" r="8" fill="none" stroke-width="3"></circle><circle class="ring-fg" cx="10" cy="10" r="8" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"></circle></svg>`;
+}
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function computeAlarmAt(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  if (!m) return 0;
+  const d = new Date();
+  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
+function startDeckTimer(minutes) {
+  const ms = Math.max(1, Math.round(minutes)) * 60000;
+  deckTimer = { running: true, paused: false, endsAt: Date.now() + ms, remainMs: ms, totalMs: ms };
+  updateClock();
+}
+
+function pauseDeckTimer() {
+  if (!deckTimer.running || deckTimer.paused) return;
+  deckTimer.paused = true;
+  deckTimer.remainMs = Math.max(0, deckTimer.endsAt - Date.now());
+  updateClock();
+}
+
+function resumeDeckTimer() {
+  if (!deckTimer.running || !deckTimer.paused) return;
+  deckTimer.paused = false;
+  deckTimer.endsAt = Date.now() + deckTimer.remainMs;
+  updateClock();
+}
+
+function cancelDeckTimer() {
+  deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
+  updateClock();
+}
+
+function beginAlarmBloom(source) {
+  alarmPhase = 'bloom';
+  bloomUntil = Date.now() + 7300;
+  afterglowLabel = source === 'timer' ? t('timerLabel') : (state.settings.alarmTime || '');
+  document.body.classList.remove('alarm-preheat');
+  document.body.classList.add('alarm-bloom');
+  setStatus('TIME');
+  setSubtitle(source === 'timer' ? t('timerDone') : t('alarmDone'));
+}
+
+function dismissAlarm() {
+  alarmPhase = 'idle';
+  bloomUntil = 0;
+  afterglowLabel = '';
+  document.body.classList.remove('alarm-bloom', 'alarm-afterglow', 'alarm-preheat');
+  if (state.settings.alarmTime) {
+    state.settings.alarmTime = '';
+    alarmAt = 0;
+    saveState();
+  }
+  updateClock();
+}
+
+function tickAlarm(nowMs) {
+  if (alarmPhase === 'bloom') {
+    if (nowMs >= bloomUntil) {
+      alarmPhase = 'afterglow';
+      document.body.classList.remove('alarm-bloom');
+      document.body.classList.add('alarm-afterglow');
+    }
+    return;
+  }
+  if (alarmPhase === 'afterglow') return;
+  if (!alarmAt) {
+    if (alarmPhase !== 'idle') { alarmPhase = 'idle'; document.body.classList.remove('alarm-preheat'); }
+    return;
+  }
+  if (nowMs >= alarmAt) {
+    alarmAt = 0;
+    beginAlarmBloom('alarm');
+    return;
+  }
+  const pre = nowMs >= alarmAt - 5 * 60000;
+  document.body.classList.toggle('alarm-preheat', pre);
+  alarmPhase = pre ? 'preheat' : 'idle';
+}
+
+function tickTimer(nowMs) {
+  if (!deckTimer.running || deckTimer.paused) return;
+  if (nowMs >= deckTimer.endsAt) {
+    deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
+    beginAlarmBloom('timer');
+  }
+}
+
 function updateClock() {
   if (!els.deckClock) return;
   const now = new Date();
-  els.deckClock.textContent = now.toLocaleTimeString(lang() === 'en' ? 'en-US' : 'ko-KR', { hour: '2-digit', minute: '2-digit' });
+  const nowMs = now.getTime();
+  tickTimer(nowMs);
+  tickAlarm(nowMs);
+  const pill = els.deckClock;
+
+  if (alarmPhase === 'afterglow') {
+    pill.classList.add('alarm-afterglow');
+    pill.classList.remove('timer-active', 'timer-ending', 'timer-paused');
+    pill.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
+    pill.title = t('alarmFiredTip');
+    return;
+  }
+  pill.classList.remove('alarm-afterglow');
+
+  if (deckTimer.running) {
+    const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - nowMs);
+    pill.classList.add('timer-active');
+    pill.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
+    pill.classList.toggle('timer-paused', deckTimer.paused);
+    pill.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
+    pill.title = t('clockTitle');
+    return;
+  }
+  pill.classList.remove('timer-active', 'timer-ending', 'timer-paused');
+
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const day = now.toLocaleDateString(lang() === 'en' ? 'en-US' : 'ko-KR', { weekday: 'short' });
+  const hour = now.getHours();
+  const icon = hour >= 6 && hour < 18 ? 'sun' : 'moon';
+  pill.innerHTML = `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span><span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`;
+  pill.title = t('clockTitle');
+}
+
+function timeCardFlow() {
+  if (alarmPhase === 'afterglow' || alarmPhase === 'bloom') { dismissAlarm(); return; }
+  let draftMinutes = deckTimer.totalMs > 0 ? Math.round(deckTimer.totalMs / 60000) : 25;
+  showModal(t('timeCard'), `
+    <div class="settings-form time-form">
+      <section class="settings-field time-clock-field">
+        <div id="tcBigClock" class="tc-big">--:--</div>
+        <div id="tcDate" class="tc-date"></div>
+      </section>
+
+      <section class="settings-field">
+        <div class="field-copy"><strong>${t('timerLabel')}</strong><span id="tcTimerStatus"></span></div>
+        <div class="tc-presets">
+          ${[5, 10, 25, 50].map((n) => `<button class="mini-action tc-preset${n === draftMinutes ? ' active' : ''}" data-min="${n}" type="button">${n}${t('minShort')}</button>`).join('')}
+        </div>
+        <div class="tc-adjust">
+          <button id="tcMinus" class="step-btn" type="button">−1</button>
+          <strong id="tcMinutes">${draftMinutes}${t('minShort')}</strong>
+          <button id="tcPlus" class="step-btn" type="button">+1</button>
+          <button id="tcTimerMain" class="mini-action accent" type="button">${t('timerStart')}</button>
+          <button id="tcTimerCancel" class="mini-action" type="button">${t('cancel')}</button>
+        </div>
+      </section>
+
+      <section class="settings-field">
+        <div class="field-copy"><strong>${t('alarmLabel')}</strong><span>${t('alarmSilentHelp')}</span></div>
+        <div class="tc-alarm">
+          <input id="tcAlarmTime" class="text-input tc-time-input" type="time" value="${escapeAttr(state.settings.alarmTime || '')}" />
+          <button id="tcAlarmSet" class="mini-action accent" type="button">${t('alarmSetBtn')}</button>
+          <button id="tcAlarmClear" class="mini-action" type="button">${t('alarmClearBtn')}</button>
+        </div>
+        <span id="tcAlarmStatus" class="tc-status"></span>
+      </section>
+
+      <div class="form-actions settings-actions">
+        <button id="tcClose" class="primary-action" type="button">${t('close')}</button>
+      </div>
+    </div>
+  `);
+
+  const setDraft = (minutes) => {
+    draftMinutes = Math.min(600, Math.max(1, Math.round(minutes)));
+    const label = $('#tcMinutes');
+    if (label) label.textContent = `${draftMinutes}${t('minShort')}`;
+    document.querySelectorAll('.tc-preset').forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.min) === draftMinutes));
+  };
+
+  const refreshCard = () => {
+    const big = $('#tcBigClock');
+    if (!big) return false;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    big.innerHTML = `${hh}<span class="clock-colon">:</span>${mm}<span class="tc-sec">:${String(now.getSeconds()).padStart(2, '0')}</span>`;
+    const date = $('#tcDate');
+    if (date) date.textContent = now.toLocaleDateString(lang() === 'en' ? 'en-US' : 'ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+    const status = $('#tcTimerStatus');
+    const mainBtn = $('#tcTimerMain');
+    if (status && mainBtn) {
+      if (deckTimer.running) {
+        const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - now.getTime());
+        status.textContent = `${formatCountdown(remain)}${deckTimer.paused ? ` · ${t('timerPause')}` : ''}`;
+        mainBtn.textContent = deckTimer.paused ? t('timerResume') : t('timerPause');
+      } else {
+        status.textContent = '';
+        mainBtn.textContent = t('timerStart');
+      }
+    }
+    const alarmStatus = $('#tcAlarmStatus');
+    if (alarmStatus) alarmStatus.textContent = state.settings.alarmTime ? `${t('alarmLabel')} ${state.settings.alarmTime}` : '';
+    return true;
+  };
+
+  const cardTick = window.setInterval(() => { if (!refreshCard()) window.clearInterval(cardTick); }, 500);
+  refreshCard();
+
+  document.querySelectorAll('.tc-preset').forEach((btn) => {
+    btn.addEventListener('click', () => setDraft(Number(btn.dataset.min)));
+  });
+  $('#tcMinus')?.addEventListener('click', () => setDraft(draftMinutes - 1));
+  $('#tcPlus')?.addEventListener('click', () => setDraft(draftMinutes + 1));
+  $('#tcTimerMain')?.addEventListener('click', () => {
+    if (!deckTimer.running) startDeckTimer(draftMinutes);
+    else if (deckTimer.paused) resumeDeckTimer();
+    else pauseDeckTimer();
+    refreshCard();
+  });
+  $('#tcTimerCancel')?.addEventListener('click', () => { cancelDeckTimer(); refreshCard(); });
+  $('#tcAlarmSet')?.addEventListener('click', () => {
+    const value = $('#tcAlarmTime')?.value || '';
+    if (!value) return;
+    state.settings.alarmTime = value;
+    alarmAt = computeAlarmAt(value);
+    document.body.classList.remove('alarm-afterglow', 'alarm-bloom');
+    alarmPhase = 'idle';
+    saveState();
+    refreshCard();
+    setStatus('ALARM');
+    setSubtitle(`${t('alarmLabel')} ${value}`);
+  });
+  $('#tcAlarmClear')?.addEventListener('click', () => {
+    state.settings.alarmTime = '';
+    alarmAt = 0;
+    document.body.classList.remove('alarm-preheat');
+    alarmPhase = 'idle';
+    saveState();
+    refreshCard();
+  });
+  $('#tcClose')?.addEventListener('click', hideModal);
 }
 
 function startClock() {
+  alarmAt = state.settings.alarmTime ? computeAlarmAt(state.settings.alarmTime) : 0;
   updateClock();
   if (clockTimer) clearInterval(clockTimer);
-  clockTimer = setInterval(updateClock, 1000);
+  clockTimer = setInterval(updateClock, 500);
 }
 
 function wireEvents() {
@@ -2401,6 +2699,7 @@ function wireEvents() {
   els.apiBtn.addEventListener('click', apiKeyFlow);
   els.themeBtn?.addEventListener('click', cycleTheme);
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
+  els.deckClock?.addEventListener('click', timeCardFlow);
   els.knobBtn?.addEventListener('click', progressKnobFlow);
   els.controlSettingsBtn?.addEventListener('click', progressKnobFlow);
   els.bassBtn?.addEventListener('click', cycleBassBoost);

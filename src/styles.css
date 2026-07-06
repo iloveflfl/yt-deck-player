@@ -1400,6 +1400,97 @@ body[data-theme="robot"] .status-pill { border-radius: 4px; }
 body[data-theme="robot"] input[type="range"] { accent-color: #39e6a3; }
 
 /* =========================================================================
+ * Deck Island — clock / timer / silent color alarm (v2.8)
+ * All colors resolve through theme CSS vars so every built-in and custom
+ * theme (incl. light themes) styles the capsule automatically.
+ * ========================================================================= */
+.clock-pill {
+  cursor: pointer;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+  transition: border-color .25s ease, background .25s ease, color .25s ease;
+}
+.clock-pill:hover { border-color: color-mix(in srgb, var(--accent) 48%, transparent); }
+.clock-pill .pill-ico { width: 11px; height: 11px; flex: 0 0 11px; fill: var(--accent); display: block; }
+.clock-pill .clock-main { font-variant-numeric: tabular-nums; }
+.clock-pill .clock-colon, .tc-big .clock-colon { display: inline-block; animation: deck-colon 2s ease-in-out infinite; }
+@keyframes deck-colon { 0%, 42% { opacity: 1; } 55%, 88% { opacity: .3; } 100% { opacity: 1; } }
+.clock-pill .clock-extra { display: none; color: var(--muted); font-weight: 800; letter-spacing: .02em; }
+.clock-pill:hover .clock-extra { display: inline; }
+.clock-pill .pill-ring { width: 13px; height: 13px; flex: 0 0 13px; display: block; transform: rotate(-90deg); }
+.clock-pill .pill-ring .ring-bg { stroke: color-mix(in srgb, var(--accent) 24%, transparent); }
+.clock-pill .pill-ring .ring-fg { stroke: var(--accent); transition: stroke-dashoffset .45s linear, stroke .4s ease; }
+.clock-pill.timer-active { color: var(--text); border-color: color-mix(in srgb, var(--accent) 44%, transparent); }
+.clock-pill.timer-ending .pill-ring .ring-fg { stroke: var(--accent2); }
+.clock-pill.timer-paused .pill-ring .ring-fg { stroke: var(--muted); }
+.clock-pill.alarm-afterglow {
+  color: color-mix(in srgb, var(--accent2) 78%, var(--text));
+  border-color: color-mix(in srgb, var(--accent2) 62%, transparent);
+  animation: deck-afterglow 2.4s ease-in-out infinite;
+}
+.clock-pill.alarm-afterglow .pill-ico { fill: currentColor; }
+@keyframes deck-afterglow {
+  0%, 100% { background: color-mix(in srgb, var(--accent2) 12%, transparent); }
+  50% { background: color-mix(in srgb, var(--accent2) 26%, transparent); }
+}
+body.is-mini .clock-pill.timer-active,
+body.is-mini .clock-pill.alarm-afterglow { display: inline-flex; }
+
+/* silent alarm color choreography */
+body.alarm-preheat .progress-fill { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+body.alarm-preheat .progress-wrap { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); transition: border-color 1.2s ease; }
+body.alarm-bloom .deck-shell { animation: deck-bloom 2.4s ease-in-out 3; }
+@keyframes deck-bloom {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--accent2) 85%, transparent);
+    box-shadow: inset 0 0 34px color-mix(in srgb, var(--accent2) 20%, transparent);
+  }
+}
+body.alarm-bloom .preview-panel,
+body.alarm-bloom .center-panel,
+body.alarm-bloom .chip-panel {
+  transition: border-color 1.2s ease;
+  border-color: color-mix(in srgb, var(--accent2) 40%, transparent);
+}
+
+/* time card popover */
+.time-form { grid-template-columns: minmax(170px, .8fr) minmax(240px, 1.15fr) minmax(230px, 1.05fr) auto; }
+.time-clock-field { align-content: center; justify-items: center; text-align: center; display: grid; }
+.tc-big { font-size: clamp(24px, 3vw, 34px); font-weight: 1000; letter-spacing: .02em; font-variant-numeric: tabular-nums; color: var(--text); }
+.tc-big .tc-sec { font-size: .5em; color: var(--muted); font-weight: 900; }
+.tc-date { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.tc-presets { display: flex; gap: 5px; flex-wrap: wrap; }
+.tc-preset.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.tc-adjust { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tc-adjust strong { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text); }
+.tc-alarm { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tc-time-input { width: 112px; height: 30px; padding: 0 8px; }
+.tc-status { color: var(--muted); font-size: 11px; }
+body.is-narrow .time-form, body.is-dock-side .time-form { grid-template-columns: 1fr; }
+body[data-dock="bottom"].is-low .time-form,
+body[data-dock="bottom"].is-mini .time-form { grid-template-columns: minmax(120px, .6fr) minmax(220px, 1.1fr) minmax(210px, 1fr) auto; gap: 6px; }
+body[data-dock="bottom"].is-low .tc-big,
+body[data-dock="bottom"].is-mini .tc-big { font-size: 21px; }
+
+/* per-theme fit: the capsule inherits each theme's construction language */
+body[data-theme^="crayon"] .clock-pill { border-style: dashed; }
+body[data-theme^="crayon"] .tc-preset { border-style: dashed; }
+body[data-theme="robot"] .clock-pill,
+body[data-theme="robot"] .tc-preset,
+body[data-theme="robot"] .tc-time-input { border-radius: 4px; }
+body[data-theme="glass"] .clock-pill { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); backdrop-filter: blur(6px); }
+body[data-theme="cutiefur"] .tc-preset { border-radius: 999px; }
+body[data-theme="moonlitfamiliar"] .clock-pill .pill-ico { fill: var(--accent2); }
+
+/* =========================================================================
  * Custom theme mode (v2.8)
  * Background image layer (cover or repeating pattern) + theme editor modal.
  * ========================================================================= */
