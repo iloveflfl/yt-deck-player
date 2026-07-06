@@ -2,6 +2,9 @@
 const STORAGE_KEY = 'yt-deck-player-state-v12';
 const LEGACY_STORAGE_KEYS = ['yt-deck-player-state-v11', 'yt-deck-player-state-v10', 'yt-deck-player-state-v9', 'yt-deck-player-state-v8', 'yt-deck-player-state-v7', 'yt-deck-player-state-v6', 'yt-deck-player-state-v5', 'yt-deck-player-state-v4', 'yt-deck-player-state-v3', 'yt-deck-player-state-v2', 'yt-deck-player-state-v1'];
 const MODES = ['off', 'bag', 'chaos'];
+// Chaos shuffle avoids re-playing any of this many most-recently-played tracks
+// (shrinks automatically for small pools so selection can never starve).
+const CHAOS_RECENT_AVOID = 15;
 const SPEED_MIN = 0.25;
 const SPEED_MAX = 2;
 const SPEED_STEP = 0.1;
@@ -1931,12 +1934,21 @@ function getNextItem(forceStart = false) {
 
   if (state.playback.shuffleMode === 'chaos') {
     if (pool.length === 1) return pool[0];
-    let pick = null;
-    for (let i = 0; i < 12; i += 1) {
-      pick = pool[Math.floor(Math.random() * pool.length)];
-      if (!currentItem || itemKey(pick) !== itemKey(currentItem)) break;
+    // Avoid the most recently played tracks (current + listening history),
+    // capped below the pool's distinct-track count so small pools never starve.
+    const distinctCount = new Set(pool.map(itemKey)).size;
+    const maxAvoid = Math.min(CHAOS_RECENT_AVOID, Math.max(1, distinctCount - 1));
+    const avoid = new Set();
+    if (currentItem) avoid.add(itemKey(currentItem));
+    for (let i = historyStack.length - 1; i >= 0 && avoid.size < maxAvoid; i -= 1) {
+      avoid.add(itemKey(historyStack[i]));
     }
-    return pick;
+    let candidates = pool.filter((item) => !avoid.has(itemKey(item)));
+    if (candidates.length === 0) {
+      candidates = currentItem ? pool.filter((item) => itemKey(item) !== itemKey(currentItem)) : pool;
+    }
+    if (candidates.length === 0) candidates = pool;
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   if (state.playback.shuffleMode === 'bag') {

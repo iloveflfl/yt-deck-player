@@ -24,7 +24,7 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   다른 최대화 창이 덱을 가리지 않습니다(SPACE 버튼). 멀티모니터·혼합 DPI 환경 지원.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
-- **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스), 반복, 배속, 볼륨, 창 불투명도.
+- **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
 - **테마 19종 + Adaptive**: Aurora Carbon부터 Crayon Pastel 3부작, Cutie Fur/Glass/Robot까지.
   Adaptive 모드는 현재 곡 썸네일 색으로 테마를 만듭니다.
 - **커스텀 테마 모드**: 테마 칩을 **우클릭**하면 에디터가 열립니다. 색상 5종을 고르고
@@ -61,8 +61,8 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   mixed-DPI aware.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
-- **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos), loop,
-  playback speed, volume, and window opacity.
+- **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
+  avoids the 15 most recently played tracks), loop, playback speed, volume, and window opacity.
 - **19 built-in themes + Adaptive**: From Aurora Carbon to the Crayon Pastel trio, Cutie Fur,
   Glass, and Robot. Adaptive derives a palette from the current track's thumbnail.
 - **Custom theme mode**: **Right-click** the theme chip to open the editor. Pick five base
