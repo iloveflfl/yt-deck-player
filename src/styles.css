@@ -1475,16 +1475,70 @@ body.is-mini .clock-pill.alarm-afterglow { display: inline-flex; }
   animation: deck-afterglow 2.4s ease-in-out infinite;
 }
 .big-clock.alarm-afterglow .pill-ico { fill: currentColor; }
-.big-clock-small { font-size: .58em; }
-.big-clock-alarm { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 900; color: var(--muted); }
-.big-clock-alarm .pill-ico { width: 10px; height: 10px; flex-basis: 10px; fill: var(--muted); }
 body.is-low .big-clock, body.is-mini .big-clock { display: none; }
 body.is-narrow .big-clock { font-size: 17px; }
 body.sleep-cue .deck-shell { animation: deck-bloom 2.4s ease-in-out 1; }
 
-/* silent alarm color choreography */
-body.alarm-preheat .progress-fill { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
-body.alarm-preheat .progress-wrap { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); transition: border-color 1.2s ease; }
+/* concurrent timer/alarm chips under the big clock — each instrument has its
+   own encoding (ring+accent = timer, bell+muted = alarm) so none of them can
+   be mistaken for the ♪-prefixed track time below */
+.time-chips { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color .25s ease, background .25s ease, color .25s ease;
+}
+.time-chip .pill-ico { width: 10px; height: 10px; flex: 0 0 10px; fill: currentColor; display: block; }
+.time-chip .pill-ring { width: 12px; height: 12px; flex: 0 0 12px; display: block; transform: rotate(-90deg); }
+.time-chip .pill-ring .ring-bg { stroke: color-mix(in srgb, var(--accent) 24%, transparent); }
+.time-chip .pill-ring .ring-fg { stroke: var(--accent); transition: stroke-dashoffset .45s linear, stroke .4s ease; }
+.timer-chip {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+.timer-chip.timer-ending .pill-ring .ring-fg { stroke: var(--accent2); }
+.timer-chip.timer-ending { border-color: color-mix(in srgb, var(--accent2) 55%, transparent); }
+.timer-chip.timer-paused { color: var(--muted); }
+.timer-chip.timer-paused .pill-ring .ring-fg { stroke: var(--muted); }
+.alarm-chip {
+  color: var(--muted);
+  border-color: color-mix(in srgb, var(--muted) 34%, transparent);
+  background: color-mix(in srgb, var(--panel2) 60%, transparent);
+}
+.alarm-chip.alarm-preheat-chip {
+  color: color-mix(in srgb, var(--accent2) 75%, var(--text));
+  border-color: color-mix(in srgb, var(--accent2) 55%, transparent);
+  animation: deck-afterglow 2.4s ease-in-out infinite;
+}
+.alarm-chip.alarm-afterglow {
+  color: color-mix(in srgb, var(--accent2) 78%, var(--text));
+  border-color: color-mix(in srgb, var(--accent2) 62%, transparent);
+  animation: deck-afterglow 2.4s ease-in-out infinite;
+}
+body.is-low .time-chips, body.is-mini .time-chips { display: none; }
+body[data-theme^="crayon"] .time-chip { border-style: dashed; }
+body[data-theme="robot"] .time-chip { border-radius: 4px; }
+
+/* track time is PLAYBACK time — mark it with a note so it can never be read
+   as the clock or the timer */
+.time-box::before { content: "♪"; color: var(--muted); font-size: 10px; font-weight: 900; }
+.clock-pill .pill-timer { color: var(--accent); font-weight: 900; }
+.clock-pill .pill-timer::before { content: "◔ "; font-size: 9px; }
+
+/* silent alarm color choreography — the preheat cue lives on the alarm chip
+   and shell border only; the playback progress bar is never touched so song
+   progress and alarm state cannot be conflated */
+body.alarm-preheat .deck-shell { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); transition: border-color 1.6s ease; }
 body.alarm-bloom .deck-shell { animation: deck-bloom 2.4s ease-in-out 3; }
 @keyframes deck-bloom {
   0%, 100% {

@@ -114,6 +114,8 @@ const I18N = {
     alarmSilentHelp: '소리 없이 색으로만 알립니다',
     alarmFiredTip: '클릭해서 알람 해제',
     clockTitle: '시계 · 클릭: 타이머/알람',
+    timerChipTip: '슬립 타이머 · 클릭: 시간 카드 · 휠: ±1분',
+    alarmChipTip: '알람 · 클릭: 시간 카드',
     minShort: '분',
   },
   en: {
@@ -218,6 +220,8 @@ const I18N = {
     alarmSilentHelp: 'Color-only, no sound',
     alarmFiredTip: 'Click to dismiss the alarm',
     clockTitle: 'Clock · click for timer & alarm',
+    timerChipTip: 'Sleep timer · click: time card · wheel: ±1 min',
+    alarmChipTip: 'Alarm · click: time card',
     minShort: 'min',
   },
 };
@@ -326,6 +330,8 @@ const els = {
   statusText: $('#statusText'),
   deckClock: $('#deckClock'),
   bigClock: $('#bigClock'),
+  timerChip: $('#timerChip'),
+  alarmChip: $('#alarmChip'),
   previewFallback: $('#previewFallback'),
   trackTitle: $('#trackTitle'),
   trackSub: $('#trackSub'),
@@ -2595,81 +2601,87 @@ function updateClock() {
   const nowMs = now.getTime();
   tickTimer(nowMs);
   tickAlarm(nowMs);
-  renderBigClock(now);
+  renderTimeCluster(now);
   const pill = els.deckClock;
 
   if (alarmPhase === 'afterglow') {
     pill.classList.add('alarm-afterglow');
-    pill.classList.remove('timer-active', 'timer-ending', 'timer-paused');
+    pill.classList.remove('timer-active');
     pill.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
     pill.title = t('alarmFiredTip');
     return;
   }
   pill.classList.remove('alarm-afterglow');
 
-  if (deckTimer.running) {
-    const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - nowMs);
-    pill.classList.add('timer-active');
-    pill.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
-    pill.classList.toggle('timer-paused', deckTimer.paused);
-    pill.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
-    pill.title = t('clockTitle');
-    return;
-  }
-  pill.classList.remove('timer-ending', 'timer-paused');
-
-  if (sleepArmed) {
-    pill.classList.add('timer-active');
-    pill.innerHTML = `${deckPillIcon('moon')}<span>${escapeHtml(t('sleepLast'))}</span>`;
-    pill.title = t('sleepArmedMsg');
-    return;
-  }
-  pill.classList.remove('timer-active');
-
+  // The pill is always a clock; when the big cluster is hidden (low/mini
+  // docks) a compact timer suffix keeps the countdown reachable without ever
+  // displacing the time of day.
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
   const ss = String(now.getSeconds()).padStart(2, '0');
   const day = now.toLocaleDateString(lang() === 'en' ? 'en-US' : 'ko-KR', { weekday: 'short' });
   const hour = now.getHours();
   const icon = hour >= 6 && hour < 18 ? 'sun' : 'moon';
-  pill.innerHTML = `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span><span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`;
-  pill.title = t('clockTitle');
+  let suffix = '';
+  if (deckTimer.running) {
+    const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - nowMs);
+    suffix = `<span class="pill-timer">${formatCountdown(remain)}</span>`;
+  } else if (sleepArmed) {
+    suffix = `<span class="pill-timer">${escapeHtml(t('sleepLast'))}</span>`;
+  }
+  pill.classList.toggle('timer-active', deckTimer.running || sleepArmed);
+  pill.innerHTML = `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>${suffix || `<span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`}`;
+  pill.title = deckTimer.running || sleepArmed ? t('timerChipTip') : t('clockTitle');
 }
 
-// Large always-visible clock in the center panel (stacked above the track
-// time box) — the primary surface for glancing time and reaching the timer/
-// alarm card in one click. Mirrors the pill's state machine.
-function renderBigClock(now) {
-  const el = els.bigClock;
-  if (!el) return;
-  el.title = t('clockTitle');
-  if (alarmPhase === 'afterglow') {
-    el.classList.add('alarm-afterglow');
-    el.classList.remove('timer-active');
-    el.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
-    el.title = t('alarmFiredTip');
-    return;
+// Time cluster in the center panel — three separate instruments that can all
+// be visible at once (Rams: each element honest about one function):
+//   row 1: big wall clock (NEVER replaced by anything else)
+//   row 2: timer chip (ring + countdown, accent) and alarm chip (bell + time)
+//   row 3: track time box (♪-prefixed) — playback time, visually distinct
+function renderTimeCluster(now) {
+  const big = els.bigClock;
+  if (big) {
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    big.innerHTML = `<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>`;
+    big.title = t('clockTitle');
   }
-  el.classList.remove('alarm-afterglow');
-  if (deckTimer.running) {
-    const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - now.getTime());
-    el.classList.add('timer-active');
-    el.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
-    el.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
-    return;
+  const timerChip = els.timerChip;
+  if (timerChip) {
+    if (deckTimer.running) {
+      const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - now.getTime());
+      timerChip.classList.remove('hidden');
+      timerChip.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
+      timerChip.classList.toggle('timer-paused', deckTimer.paused);
+      timerChip.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
+      timerChip.title = t('timerChipTip');
+    } else if (sleepArmed) {
+      timerChip.classList.remove('hidden');
+      timerChip.classList.remove('timer-ending', 'timer-paused');
+      timerChip.innerHTML = `${deckPillIcon('moon')}<span>${escapeHtml(t('sleepLast'))}</span>`;
+      timerChip.title = t('sleepArmedMsg');
+    } else {
+      timerChip.classList.add('hidden');
+    }
   }
-  el.classList.remove('timer-active', 'timer-ending');
-  if (sleepArmed) {
-    el.innerHTML = `${deckPillIcon('moon')}<span class="big-clock-small">${escapeHtml(t('sleepLast'))}</span>`;
-    el.title = t('sleepArmedMsg');
-    return;
+  const alarmChip = els.alarmChip;
+  if (alarmChip) {
+    if (alarmPhase === 'afterglow') {
+      alarmChip.classList.remove('hidden', 'alarm-preheat-chip');
+      alarmChip.classList.add('alarm-afterglow');
+      alarmChip.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
+      alarmChip.title = t('alarmFiredTip');
+    } else if (state.settings.alarmTime) {
+      alarmChip.classList.remove('hidden', 'alarm-afterglow');
+      alarmChip.classList.toggle('alarm-preheat-chip', alarmPhase === 'preheat');
+      alarmChip.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(state.settings.alarmTime)}</span>`;
+      alarmChip.title = t('alarmChipTip');
+    } else {
+      alarmChip.classList.add('hidden');
+      alarmChip.classList.remove('alarm-afterglow', 'alarm-preheat-chip');
+    }
   }
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const alarmBadge = state.settings.alarmTime
-    ? `<span class="big-clock-alarm">${deckPillIcon('bell')}${escapeHtml(state.settings.alarmTime)}</span>`
-    : '';
-  el.innerHTML = `<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>${alarmBadge}`;
 }
 
 function timeCardFlow() {
@@ -2812,6 +2824,15 @@ function wireEvents() {
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
   els.deckClock?.addEventListener('click', timeCardFlow);
   els.bigClock?.addEventListener('click', timeCardFlow);
+  els.timerChip?.addEventListener('click', timeCardFlow);
+  els.timerChip?.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    adjustDeckTimer(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+  els.alarmChip?.addEventListener('click', () => {
+    if (alarmPhase === 'afterglow' || alarmPhase === 'bloom') dismissAlarm();
+    else timeCardFlow();
+  });
   els.knobBtn?.addEventListener('click', progressKnobFlow);
   els.controlSettingsBtn?.addEventListener('click', progressKnobFlow);
   els.bassBtn?.addEventListener('click', cycleBassBoost);
