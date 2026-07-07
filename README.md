@@ -31,9 +31,9 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   배경 이미지를 "채우기" 또는 "패턴 반복"으로 깔 수 있으며, 저장한 테마는 누적 보관되어
   테마 순환에 포함됩니다.
 - **트레이 아이콘**: 클릭으로 보이기/숨기기, 우클릭 메뉴로 재생 제어. 툴팁에 현재 곡 표시.
-- **Deck Island (시계·타이머·무음 알람)**: 상단 시계 캡슐 클릭 → 타임 카드.
-  타이머는 진행 링으로 카운트다운, 알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알립니다.
-  모든 색은 테마 변수를 따라 19개 테마 + 커스텀 테마와 자동으로 어울립니다.
+- **Deck Island (시계·슬립 타이머·무음 알람)**: 센터 패널의 큰 시계(또는 상단 캡슐) 클릭 → 타임 카드.
+  프리셋을 누르면 슬립 타이머가 즉시 시작되고, 시간이 다 되면 그 곡을 마지막으로 재생을 멈춥니다("앞으로 N분만 재생").
+  알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알리며, 모든 색은 테마 변수를 따라 19개 테마 + 커스텀 테마와 자동으로 어울립니다.
 - **상태 보존**: 라이브러리는 `문서\YTDeckPlayer\library-state.json`에 저장되고,
   손상 시 자동 백업본으로 복구됩니다.
 
@@ -73,10 +73,11 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   Saved themes accumulate and join the theme cycle.
 - **Tray icon**: Click to show/hide, right-click for playback controls; the tooltip shows the
   current track.
-- **Deck Island (clock · timer · silent alarm)**: Click the top-bar clock capsule for the time
-  card. The timer counts down with a progress ring; the alarm notifies with a three-stage color
-  choreography (preheat → bloom → afterglow) instead of sound. Everything follows theme
-  variables, so all 19 themes and custom themes style it automatically.
+- **Deck Island (clock · sleep timer · silent alarm)**: Click the big center-panel clock (or the
+  top capsule) for the time card. Presets start the sleep timer instantly; when time runs out the
+  song playing becomes the last one ("play for N more minutes"). The alarm notifies with a
+  three-stage color choreography (preheat → bloom → afterglow) instead of sound. Everything
+  follows theme variables, so all 19 themes and custom themes style it automatically.
 - **Durable state**: The library persists to `Documents\YTDeckPlayer\library-state.json` with
   automatic backup/recovery on corruption.
 

@@ -104,7 +104,10 @@ const I18N = {
     timerStart: '시작',
     timerPause: '일시정지',
     timerResume: '재개',
-    timerDone: '타이머 종료 — 시계를 클릭해 해제하세요',
+    timerSleepHelp: '프리셋을 누르면 바로 시작 · 시간이 다 되면 그 곡을 마지막으로 정지',
+    sleepLast: '마지막 곡',
+    sleepArmedMsg: '타이머 종료 — 지금 곡을 끝으로 재생을 멈춥니다',
+    sleepDoneMsg: '슬립 타이머 — 재생을 멈췄습니다',
     alarmDone: '알람 시각입니다 — 시계를 클릭해 해제하세요',
     alarmSetBtn: '설정',
     alarmClearBtn: '해제',
@@ -205,7 +208,10 @@ const I18N = {
     timerStart: 'Start',
     timerPause: 'Pause',
     timerResume: 'Resume',
-    timerDone: 'Timer finished — click the clock to dismiss',
+    timerSleepHelp: 'Presets start instantly · playback stops after the song playing when time runs out',
+    sleepLast: 'Last song',
+    sleepArmedMsg: 'Timer done — stopping after this song',
+    sleepDoneMsg: 'Sleep timer — playback stopped',
     alarmDone: 'Alarm time — click the clock to dismiss',
     alarmSetBtn: 'Set',
     alarmClearBtn: 'Clear',
@@ -319,6 +325,7 @@ const els = {
   app: $('#app'),
   statusText: $('#statusText'),
   deckClock: $('#deckClock'),
+  bigClock: $('#bigClock'),
   previewFallback: $('#previewFallback'),
   trackTitle: $('#trackTitle'),
   trackSub: $('#trackSub'),
@@ -2080,11 +2087,19 @@ function setTrackTitleText(text) {
 
 function handleNaturalEnd() {
   if (onboardDirty) commitOnBoardChanges('ended');
+  if (sleepArmed) {
+    finishSleep();
+    return;
+  }
   animateProgressRewindThen(() => playNext(false, { auto: true }));
 }
 
 function handlePlaybackErrorSkip() {
   if (onboardDirty) commitOnBoardChanges('error');
+  if (sleepArmed) {
+    finishSleep();
+    return;
+  }
   const now = Date.now();
   if (now - lastAutoSkipAt > 8000) autoSkipCount = 0;
   lastAutoSkipAt = now;
@@ -2424,6 +2439,10 @@ function wireDropZone(zone, onDrop, effect = 'copy') {
  * (pill stays tinted until clicked). All colors come from theme CSS vars.
  * ========================================================================= */
 let deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
+// Sleep timer: when the countdown ends, the song playing at that moment is the
+// LAST one — playback stops instead of advancing ("play for N more minutes").
+let sleepArmed = false;
+let sleepCueTimer = null;
 let alarmAt = 0;
 let alarmPhase = 'idle';
 let bloomUntil = 0;
@@ -2480,17 +2499,49 @@ function resumeDeckTimer() {
 
 function cancelDeckTimer() {
   deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
+  sleepArmed = false;
+  document.body.classList.remove('sleep-cue');
   updateClock();
 }
 
-function beginAlarmBloom(source) {
+// Live-adjust a running timer by whole minutes (Teenage Engineering style —
+// no stop/restart needed). Falls through to the caller for draft adjustment
+// when no timer is running.
+function adjustDeckTimer(deltaMinutes) {
+  if (!deckTimer.running) return false;
+  const delta = deltaMinutes * 60000;
+  if (deckTimer.paused) deckTimer.remainMs = Math.max(5000, deckTimer.remainMs + delta);
+  else deckTimer.endsAt = Math.max(Date.now() + 5000, deckTimer.endsAt + delta);
+  deckTimer.totalMs = Math.max(60000, deckTimer.totalMs + delta);
+  updateClock();
+  return true;
+}
+
+function armSleep() {
+  sleepArmed = true;
+  clearTimeout(sleepCueTimer);
+  document.body.classList.add('sleep-cue');
+  sleepCueTimer = window.setTimeout(() => document.body.classList.remove('sleep-cue'), 2600);
+  setStatus('SLEEP');
+  setSubtitle(t('sleepArmedMsg'));
+}
+
+function finishSleep() {
+  sleepArmed = false;
+  updatePlayButtonLabel(false);
+  setStatus('SLEEP');
+  setSubtitle(t('sleepDoneMsg'));
+  updateClock();
+}
+
+function beginAlarmBloom() {
   alarmPhase = 'bloom';
   bloomUntil = Date.now() + 7300;
-  afterglowLabel = source === 'timer' ? t('timerLabel') : (state.settings.alarmTime || '');
+  afterglowLabel = state.settings.alarmTime || '';
   document.body.classList.remove('alarm-preheat');
   document.body.classList.add('alarm-bloom');
   setStatus('TIME');
-  setSubtitle(source === 'timer' ? t('timerDone') : t('alarmDone'));
+  setSubtitle(t('alarmDone'));
 }
 
 function dismissAlarm() {
@@ -2522,7 +2573,7 @@ function tickAlarm(nowMs) {
   }
   if (nowMs >= alarmAt) {
     alarmAt = 0;
-    beginAlarmBloom('alarm');
+    beginAlarmBloom();
     return;
   }
   const pre = nowMs >= alarmAt - 5 * 60000;
@@ -2534,7 +2585,7 @@ function tickTimer(nowMs) {
   if (!deckTimer.running || deckTimer.paused) return;
   if (nowMs >= deckTimer.endsAt) {
     deckTimer = { running: false, paused: false, endsAt: 0, remainMs: 0, totalMs: 0 };
-    beginAlarmBloom('timer');
+    armSleep();
   }
 }
 
@@ -2544,6 +2595,7 @@ function updateClock() {
   const nowMs = now.getTime();
   tickTimer(nowMs);
   tickAlarm(nowMs);
+  renderBigClock(now);
   const pill = els.deckClock;
 
   if (alarmPhase === 'afterglow') {
@@ -2564,7 +2616,15 @@ function updateClock() {
     pill.title = t('clockTitle');
     return;
   }
-  pill.classList.remove('timer-active', 'timer-ending', 'timer-paused');
+  pill.classList.remove('timer-ending', 'timer-paused');
+
+  if (sleepArmed) {
+    pill.classList.add('timer-active');
+    pill.innerHTML = `${deckPillIcon('moon')}<span>${escapeHtml(t('sleepLast'))}</span>`;
+    pill.title = t('sleepArmedMsg');
+    return;
+  }
+  pill.classList.remove('timer-active');
 
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
@@ -2574,6 +2634,42 @@ function updateClock() {
   const icon = hour >= 6 && hour < 18 ? 'sun' : 'moon';
   pill.innerHTML = `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span><span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`;
   pill.title = t('clockTitle');
+}
+
+// Large always-visible clock in the center panel (stacked above the track
+// time box) — the primary surface for glancing time and reaching the timer/
+// alarm card in one click. Mirrors the pill's state machine.
+function renderBigClock(now) {
+  const el = els.bigClock;
+  if (!el) return;
+  el.title = t('clockTitle');
+  if (alarmPhase === 'afterglow') {
+    el.classList.add('alarm-afterglow');
+    el.classList.remove('timer-active');
+    el.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
+    el.title = t('alarmFiredTip');
+    return;
+  }
+  el.classList.remove('alarm-afterglow');
+  if (deckTimer.running) {
+    const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - now.getTime());
+    el.classList.add('timer-active');
+    el.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
+    el.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
+    return;
+  }
+  el.classList.remove('timer-active', 'timer-ending');
+  if (sleepArmed) {
+    el.innerHTML = `${deckPillIcon('moon')}<span class="big-clock-small">${escapeHtml(t('sleepLast'))}</span>`;
+    el.title = t('sleepArmedMsg');
+    return;
+  }
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const alarmBadge = state.settings.alarmTime
+    ? `<span class="big-clock-alarm">${deckPillIcon('bell')}${escapeHtml(state.settings.alarmTime)}</span>`
+    : '';
+  el.innerHTML = `<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>${alarmBadge}`;
 }
 
 function timeCardFlow() {
@@ -2587,7 +2683,7 @@ function timeCardFlow() {
       </section>
 
       <section class="settings-field">
-        <div class="field-copy"><strong>${t('timerLabel')}</strong><span id="tcTimerStatus"></span></div>
+        <div class="field-copy"><strong>${t('timerLabel')}</strong><span>${t('timerSleepHelp')}</span><span id="tcTimerStatus" class="tc-status"></span></div>
         <div class="tc-presets">
           ${[5, 10, 25, 50].map((n) => `<button class="mini-action tc-preset${n === draftMinutes ? ' active' : ''}" data-min="${n}" type="button">${n}${t('minShort')}</button>`).join('')}
         </div>
@@ -2639,6 +2735,9 @@ function timeCardFlow() {
         const remain = deckTimer.paused ? deckTimer.remainMs : Math.max(0, deckTimer.endsAt - now.getTime());
         status.textContent = `${formatCountdown(remain)}${deckTimer.paused ? ` · ${t('timerPause')}` : ''}`;
         mainBtn.textContent = deckTimer.paused ? t('timerResume') : t('timerPause');
+      } else if (sleepArmed) {
+        status.textContent = t('sleepArmedMsg');
+        mainBtn.textContent = t('timerStart');
       } else {
         status.textContent = '';
         mainBtn.textContent = t('timerStart');
@@ -2652,11 +2751,18 @@ function timeCardFlow() {
   const cardTick = window.setInterval(() => { if (!refreshCard()) window.clearInterval(cardTick); }, 500);
   refreshCard();
 
+  // Presets start the sleep timer instantly — one click from card-open to
+  // running. +/-1 adjusts the LIVE timer when one is running.
   document.querySelectorAll('.tc-preset').forEach((btn) => {
-    btn.addEventListener('click', () => setDraft(Number(btn.dataset.min)));
+    btn.addEventListener('click', () => {
+      const minutes = Number(btn.dataset.min);
+      setDraft(minutes);
+      startDeckTimer(minutes);
+      refreshCard();
+    });
   });
-  $('#tcMinus')?.addEventListener('click', () => setDraft(draftMinutes - 1));
-  $('#tcPlus')?.addEventListener('click', () => setDraft(draftMinutes + 1));
+  $('#tcMinus')?.addEventListener('click', () => { if (!adjustDeckTimer(-1)) setDraft(draftMinutes - 1); refreshCard(); });
+  $('#tcPlus')?.addEventListener('click', () => { if (!adjustDeckTimer(1)) setDraft(draftMinutes + 1); refreshCard(); });
   $('#tcTimerMain')?.addEventListener('click', () => {
     if (!deckTimer.running) startDeckTimer(draftMinutes);
     else if (deckTimer.paused) resumeDeckTimer();
@@ -2664,7 +2770,7 @@ function timeCardFlow() {
     refreshCard();
   });
   $('#tcTimerCancel')?.addEventListener('click', () => { cancelDeckTimer(); refreshCard(); });
-  $('#tcAlarmSet')?.addEventListener('click', () => {
+  const doSetAlarm = () => {
     const value = $('#tcAlarmTime')?.value || '';
     if (!value) return;
     state.settings.alarmTime = value;
@@ -2675,7 +2781,12 @@ function timeCardFlow() {
     refreshCard();
     setStatus('ALARM');
     setSubtitle(`${t('alarmLabel')} ${value}`);
-  });
+  };
+  // Picking a time is enough — the change event sets the alarm without an
+  // extra click; Enter and the Set button also work.
+  $('#tcAlarmTime')?.addEventListener('change', doSetAlarm);
+  $('#tcAlarmTime')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSetAlarm(); });
+  $('#tcAlarmSet')?.addEventListener('click', doSetAlarm);
   $('#tcAlarmClear')?.addEventListener('click', () => {
     state.settings.alarmTime = '';
     alarmAt = 0;
@@ -2700,6 +2811,7 @@ function wireEvents() {
   els.themeBtn?.addEventListener('click', cycleTheme);
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
   els.deckClock?.addEventListener('click', timeCardFlow);
+  els.bigClock?.addEventListener('click', timeCardFlow);
   els.knobBtn?.addEventListener('click', progressKnobFlow);
   els.controlSettingsBtn?.addEventListener('click', progressKnobFlow);
   els.bassBtn?.addEventListener('click', cycleBassBoost);

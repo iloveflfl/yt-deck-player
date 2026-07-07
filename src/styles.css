@@ -1407,9 +1407,13 @@ body[data-theme="robot"] input[type="range"] { accent-color: #39e6a3; }
 .clock-pill {
   cursor: pointer;
   gap: 4px;
+  white-space: nowrap;
   -webkit-app-region: no-drag;
   transition: border-color .25s ease, background .25s ease, color .25s ease;
 }
+/* Side dock squeezes top-actions into a 4-column grid; give the clock two
+   cells so "04:07" can never wrap onto two lines. */
+body.is-dock-side .top-actions .clock-pill { grid-column: span 2; overflow: hidden; }
 .clock-pill:hover { border-color: color-mix(in srgb, var(--accent) 48%, transparent); }
 .clock-pill .pill-ico { width: 11px; height: 11px; flex: 0 0 11px; fill: var(--accent); display: block; }
 .clock-pill .clock-main { font-variant-numeric: tabular-nums; }
@@ -1435,6 +1439,48 @@ body[data-theme="robot"] input[type="range"] { accent-color: #39e6a3; }
 }
 body.is-mini .clock-pill.timer-active,
 body.is-mini .clock-pill.alarm-afterglow { display: inline-flex; }
+
+/* big always-visible clock stacked above the track time box */
+.time-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; min-width: 0; }
+.big-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: clamp(19px, 2.3vw, 30px);
+  font-weight: 1000;
+  line-height: 1.05;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .25s ease, background .25s ease;
+}
+.big-clock:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.big-clock .clock-colon { display: inline-block; animation: deck-colon 2s ease-in-out infinite; }
+.big-clock .pill-ico { width: 15px; height: 15px; flex: 0 0 15px; fill: var(--accent); display: block; }
+.big-clock .pill-ring { width: 19px; height: 19px; flex: 0 0 19px; display: block; transform: rotate(-90deg); }
+.big-clock .pill-ring .ring-bg { stroke: color-mix(in srgb, var(--accent) 24%, transparent); }
+.big-clock .pill-ring .ring-fg { stroke: var(--accent); transition: stroke-dashoffset .45s linear, stroke .4s ease; }
+.big-clock.timer-ending .pill-ring .ring-fg { stroke: var(--accent2); }
+.big-clock.alarm-afterglow {
+  color: color-mix(in srgb, var(--accent2) 78%, var(--text));
+  border-color: color-mix(in srgb, var(--accent2) 62%, transparent);
+  animation: deck-afterglow 2.4s ease-in-out infinite;
+}
+.big-clock.alarm-afterglow .pill-ico { fill: currentColor; }
+.big-clock-small { font-size: .58em; }
+.big-clock-alarm { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 900; color: var(--muted); }
+.big-clock-alarm .pill-ico { width: 10px; height: 10px; flex-basis: 10px; fill: var(--muted); }
+body.is-low .big-clock, body.is-mini .big-clock { display: none; }
+body.is-narrow .big-clock { font-size: 17px; }
+body.sleep-cue .deck-shell { animation: deck-bloom 2.4s ease-in-out 1; }
 
 /* silent alarm color choreography */
 body.alarm-preheat .progress-fill { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
