@@ -115,6 +115,16 @@ const I18N = {
     alarmFiredTip: '클릭해서 알람 해제',
     clockTitle: '시계 · 클릭: 타이머/알람',
     timerChipTip: '슬립 타이머 · 클릭: 시간 카드 · 휠: ±1분',
+    tbTitle: '트랙 찾기',
+    tbPlaceholder: '곡 · 아티스트 · 플레이리스트 검색 (초성 가능)',
+    tbScopeBoard: '온보드',
+    tbScopeLibrary: '라이브러리 전체',
+    tbHint: '↑↓ 이동 · Enter 재생 · Esc 닫기',
+    tbNoMatch: '검색 결과가 없습니다',
+    tbEmptyScope: '이 범위에 트랙이 없습니다',
+    tbTracks: '곡',
+    tbOpen: '트랙 찾기 (Ctrl+F)',
+    tbOffBoard: '라이브러리에서 재생 — 다음 곡은 온보드 풀에서 이어집니다',
     alarmChipTip: '알람 · 클릭: 시간 카드',
     minShort: '분',
   },
@@ -221,6 +231,16 @@ const I18N = {
     alarmFiredTip: 'Click to dismiss the alarm',
     clockTitle: 'Clock · click for timer & alarm',
     timerChipTip: 'Sleep timer · click: time card · wheel: ±1 min',
+    tbTitle: 'Find tracks',
+    tbPlaceholder: 'Search title, artist, or playlist',
+    tbScopeBoard: 'On board',
+    tbScopeLibrary: 'Whole library',
+    tbHint: '↑↓ move · Enter play · Esc close',
+    tbNoMatch: 'No matching tracks',
+    tbEmptyScope: 'No tracks in this scope',
+    tbTracks: 'tracks',
+    tbOpen: 'Find tracks (Ctrl+F)',
+    tbOffBoard: 'Played from the library — the next song continues from the on-board pool',
     alarmChipTip: 'Alarm · click: time card',
     minShort: 'min',
   },
@@ -293,6 +313,7 @@ let badItemKeys = new Set();
 let autoSkipCount = 0;
 let lastAutoSkipAt = 0;
 let persistentSaveTimer = null;
+let localSaveTimer = null;
 let lastAppliedAdaptiveKey = '';
 let gracefulClosing = false;
 
@@ -330,6 +351,7 @@ const els = {
   statusText: $('#statusText'),
   deckClock: $('#deckClock'),
   bigClock: $('#bigClock'),
+  searchBtn: $('#searchBtn'),
   timerChip: $('#timerChip'),
   alarmChip: $('#alarmChip'),
   previewFallback: $('#previewFallback'),
@@ -433,6 +455,7 @@ function onPlayerError(event) {
   setStatus(`SKIP ${code}`);
   if (currentItem) {
     badItemKeys.add(itemKey(currentItem));
+    bumpDataVersion();
     queueBag = queueBag.filter((item) => !badItemKeys.has(itemKey(item)));
     if (state.playback.shuffleMode === 'off') sequentialIndex = Math.max(-1, sequentialIndex - 1);
   }
@@ -472,13 +495,29 @@ function stateForPersistence() {
   };
 }
 
-function saveState() {
-  const payload = JSON.stringify(stateForPersistence());
-  // Custom theme background images (data URLs) can exceed the localStorage
-  // quota; the Documents JSON file is the durable store, so a quota failure
-  // here must not break the app.
-  try { localStorage.setItem(STORAGE_KEY, payload); } catch (err) { console.warn('localStorage save skipped:', err.message || err); }
+function saveState({ immediate = false } = {}) {
+  bumpDataVersion();
+  if (immediate) {
+    flushLocalSave();
+  } else if (!localSaveTimer) {
+    // Serialising the whole library (hundreds of tracks, plus custom theme
+    // image data URLs) is expensive, so batch bursts of mutations into one
+    // write per frame-ish window. The Documents JSON file remains the durable
+    // store and is flushed on close.
+    localSaveTimer = window.setTimeout(flushLocalSave, 400);
+  }
   schedulePersistentSave();
+}
+
+function flushLocalSave() {
+  if (localSaveTimer) { clearTimeout(localSaveTimer); localSaveTimer = null; }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateForPersistence()));
+  } catch (err) {
+    // Quota exceeded (large custom-theme images) must never break the app —
+    // the Documents JSON file is the durable store.
+    console.warn('localStorage save skipped:', err.message || err);
+  }
 }
 
 function schedulePersistentSave() {
@@ -512,6 +551,7 @@ function applyLanguage() {
     node.textContent = t(node.dataset.i18n);
   });
   if (currentItem) setTrackTitleText(composeTrackTitle(currentItem));
+  if (els.searchBtn) els.searchBtn.title = t('tbOpen');
   if (els.addBtn) {
     els.addBtn.innerHTML = `${linkIconSvg()}<span>${t(window.innerWidth < 700 ? 'addLinkCompact' : 'addLink')}</span>`;
     els.addBtn.title = lang() === 'en' ? 'Save a YouTube link as a chip' : '유튜브 링크를 칩으로 저장';
@@ -741,8 +781,46 @@ function setSubtitle(text, options = {}) {
   }
 }
 
+/* =========================================================================
+ * Data indexes and caches
+ * -------------------------------------------------------------------------
+ * The deck rebuilds play pools constantly (every track change, every render,
+ * every chaos pick). With multi-hundred-track playlists that was O(library)
+ * object churn per call. dataVersion is bumped by every mutation path, so the
+ * index and the pool cache can be reused until something actually changes.
+ * ========================================================================= */
+let dataVersion = 0;
+let playlistIndex = null;
+let playlistIndexVersion = -1;
+const poolCache = new Map();
+// Distinct-track counts are derived per pool array, so they can ride along
+// with the cached array itself instead of being recomputed on every pick.
+const poolDistinctCache = new WeakMap();
+
+function poolDistinctCount(pool) {
+  let count = poolDistinctCache.get(pool);
+  if (count === undefined) {
+    count = new Set(pool.map(itemKey)).size;
+    poolDistinctCache.set(pool, count);
+  }
+  return count;
+}
+
+function bumpDataVersion() {
+  dataVersion += 1;
+  if (poolCache.size) poolCache.clear();
+}
+
+function getPlaylistIndex() {
+  if (!playlistIndex || playlistIndexVersion !== dataVersion) {
+    playlistIndex = new Map(state.library.map((p) => [p.id, p]));
+    playlistIndexVersion = dataVersion;
+  }
+  return playlistIndex;
+}
+
 function getPlaylist(id) {
-  return state.library.find((p) => p.id === id);
+  return getPlaylistIndex().get(id);
 }
 
 function thumbnailForVideo(videoId) {
@@ -759,8 +837,11 @@ function playlistThumb(playlist) {
 }
 
 function buildPoolForIds(ids, options = {}) {
-  const pool = [];
   const includeBad = Boolean(options.includeBad);
+  const cacheKey = `${dataVersion}|${includeBad ? 1 : 0}|${ids.join(',')}`;
+  const cached = poolCache.get(cacheKey);
+  if (cached) return cached;
+  const pool = [];
   ids.forEach((id) => {
     const playlist = getPlaylist(id);
     if (!playlist) return;
@@ -801,6 +882,9 @@ function buildPoolForIds(ids, options = {}) {
     // the app-level unified queue. Raw YouTube playlist fallback caused NEXT/PREV and
     // shuffle to restart from the first item, so v0.5 keeps it out of the queue.
   });
+  // Bound the cache: only a handful of id-set/flag combinations are ever live.
+  if (poolCache.size > 12) poolCache.clear();
+  poolCache.set(cacheKey, pool);
   return pool;
 }
 
@@ -813,7 +897,7 @@ function buildVisiblePool() {
 }
 
 function activeTrackCount(ids = state.onBoard) {
-  return buildPoolForIds(ids, { includeBad: true }).reduce((count, item) => count + (item.type === 'playlistFallback' ? 0 : 1), 0);
+  return buildPoolForIds(ids, { includeBad: true }).length;
 }
 
 function render() {
@@ -828,6 +912,7 @@ function render() {
 }
 
 function normalizeState() {
+  bumpDataVersion();
   const validIds = new Set(state.library.map((p) => p.id));
   state.onBoard = [...new Set(state.onBoard)].filter((id) => validIds.has(id));
   activeOnBoard = [...new Set(activeOnBoard)].filter((id) => validIds.has(id));
@@ -851,9 +936,28 @@ function isChipOnBoard(id) {
   return state.onBoard.includes(id);
 }
 
+// A chip's visible content is fully described by these fields, so rebuilding
+// the DOM (and its drag listeners) is only needed when one of them changes.
+function chipSignature(playlist, onboard) {
+  return [
+    playlist.id,
+    playlist.name,
+    playlist.tracks?.length || 0,
+    playlist.type,
+    playlist.importPartial ? 1 : 0,
+    playlist.importComplete ? 1 : 0,
+    playlist.importError ? 1 : 0,
+    playlist.volatile ? 1 : 0,
+    playlistThumb(playlist),
+    onboard ? 1 : 0,
+  ].join('');
+}
+
+function zoneSignature(playlists, onboard) {
+  return `${lang()}${playlists.map((p) => chipSignature(p, onboard)).join('')}`;
+}
+
 function renderOnBoard() {
-  els.onBoardChips.innerHTML = '';
-  const pool = buildVisiblePool();
   const totalTracks = activeTrackCount(state.onBoard);
   const importNeededCount = state.onBoard
     .map(getPlaylist)
@@ -863,28 +967,39 @@ function renderOnBoard() {
     : `${totalTracks} tracks`;
   els.poolCount.textContent = onboardDirty ? `${baseCountText} • next` : baseCountText;
 
-  if (state.onBoard.length === 0) {
+  const playlists = state.onBoard.map(getPlaylist).filter(Boolean);
+  const signature = zoneSignature(playlists, true);
+  if (els.onBoardChips.dataset.signature === signature) return;
+  els.onBoardChips.dataset.signature = signature;
+  els.onBoardChips.innerHTML = '';
+
+  if (playlists.length === 0) {
     els.onBoardChips.appendChild(emptyNote(t('dropToOnBoard')));
     return;
   }
 
-  state.onBoard.forEach((id) => {
-    const playlist = getPlaylist(id);
-    if (!playlist) return;
-    els.onBoardChips.appendChild(createChip(playlist, { onboard: true }));
-  });
+  const frag = document.createDocumentFragment();
+  playlists.forEach((playlist) => frag.appendChild(createChip(playlist, { onboard: true })));
+  els.onBoardChips.appendChild(frag);
 }
 
 function renderLibrary() {
-  els.libraryChips.innerHTML = '';
   const visibleLibrary = state.library.filter((p) => !p.volatile);
+  const onBoardSet = new Set(state.onBoard);
+  const signature = `${lang()}${visibleLibrary.map((p) => chipSignature(p, onBoardSet.has(p.id))).join('')}`;
+  if (els.libraryChips.dataset.signature === signature) return;
+  els.libraryChips.dataset.signature = signature;
+  els.libraryChips.innerHTML = '';
+
   if (visibleLibrary.length === 0) {
     els.libraryChips.appendChild(emptyNote(t('dropToLibrary')));
     return;
   }
+  const frag = document.createDocumentFragment();
   visibleLibrary.forEach((playlist) => {
-    els.libraryChips.appendChild(createChip(playlist, { onboard: state.onBoard.includes(playlist.id), library: true }));
+    frag.appendChild(createChip(playlist, { onboard: onBoardSet.has(playlist.id), library: true }));
   });
+  els.libraryChips.appendChild(frag);
 }
 
 function emptyNote(text) {
@@ -991,6 +1106,7 @@ function commitOnBoardChanges(reason = 'commit') {
 }
 
 function markOnBoardChanged() {
+  bumpDataVersion();
   if (playbackHasLoadedItem()) {
     onboardDirty = true;
     setStatus('PENDING');
@@ -1978,7 +2094,7 @@ function getNextItem(forceStart = false) {
     if (pool.length === 1) return pool[0];
     // Avoid the most recently played tracks (current + listening history),
     // capped below the pool's distinct-track count so small pools never starve.
-    const distinctCount = new Set(pool.map(itemKey)).size;
+    const distinctCount = poolDistinctCount(pool);
     const maxAvoid = Math.min(CHAOS_RECENT_AVOID, Math.max(1, distinctCount - 1));
     const avoid = new Set();
     if (currentItem) avoid.add(itemKey(currentItem));
@@ -2240,6 +2356,7 @@ async function importPlaylistTracksNoKey(id, opts = {}) {
     playlist.importError = '';
     playlist.updatedAt = new Date().toISOString();
     badItemKeys.clear();
+    bumpDataVersion();
     if (state.onBoard.includes(playlist.id) || activeOnBoard.includes(playlist.id)) markOnBoardChanged();
     else render();
     setStatus(onboardDirty ? 'PENDING' : 'READY');
@@ -2272,6 +2389,9 @@ function showModal(title, bodyHtml, options = {}) {
 }
 
 function hideModal() {
+  try { trackBrowser?.dispose?.(); } catch {}
+  trackBrowser = null;
+  els.modal.classList.remove('tb-modal');
   els.modal.classList.add('hidden');
   els.modalBody.innerHTML = '';
   document.body.classList.remove('modal-open');
@@ -2607,7 +2727,7 @@ function updateClock() {
   if (alarmPhase === 'afterglow') {
     pill.classList.add('alarm-afterglow');
     pill.classList.remove('timer-active');
-    pill.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
+    setHtmlIfChanged(pill, `pill:fired:${afterglowLabel}`, `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`);
     pill.title = t('alarmFiredTip');
     return;
   }
@@ -2630,7 +2750,7 @@ function updateClock() {
     suffix = `<span class="pill-timer">${escapeHtml(t('sleepLast'))}</span>`;
   }
   pill.classList.toggle('timer-active', deckTimer.running || sleepArmed);
-  pill.innerHTML = `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>${suffix || `<span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`}`;
+  setHtmlIfChanged(pill, `pill:${icon}:${hh}:${mm}:${ss}:${suffix}`, `${deckPillIcon(icon)}<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>${suffix || `<span class="clock-extra">:${ss} · ${escapeHtml(day)}</span>`}`);
   pill.title = deckTimer.running || sleepArmed ? t('timerChipTip') : t('clockTitle');
 }
 
@@ -2639,12 +2759,20 @@ function updateClock() {
 //   row 1: big wall clock (NEVER replaced by anything else)
 //   row 2: timer chip (ring + countdown, accent) and alarm chip (bell + time)
 //   row 3: track time box (♪-prefixed) — playback time, visually distinct
+function setHtmlIfChanged(el, key, html) {
+  // The clock ticks twice a second forever; re-parsing identical markup keeps
+  // the compositor busy for nothing, so only touch the DOM on real changes.
+  if (!el || el.dataset.rendered === key) return;
+  el.dataset.rendered = key;
+  el.innerHTML = html;
+}
+
 function renderTimeCluster(now) {
   const big = els.bigClock;
   if (big) {
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
-    big.innerHTML = `<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>`;
+    setHtmlIfChanged(big, `clock:${hh}:${mm}`, `<span class="clock-main">${hh}<span class="clock-colon">:</span>${mm}</span>`);
     big.title = t('clockTitle');
   }
   const timerChip = els.timerChip;
@@ -2654,12 +2782,12 @@ function renderTimeCluster(now) {
       timerChip.classList.remove('hidden');
       timerChip.classList.toggle('timer-ending', !deckTimer.paused && remain <= 60000);
       timerChip.classList.toggle('timer-paused', deckTimer.paused);
-      timerChip.innerHTML = `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`;
+      setHtmlIfChanged(timerChip, `timer:${formatCountdown(remain)}`, `${timerRingSvg(deckTimer.totalMs > 0 ? remain / deckTimer.totalMs : 0)}<span>${formatCountdown(remain)}</span>`);
       timerChip.title = t('timerChipTip');
     } else if (sleepArmed) {
       timerChip.classList.remove('hidden');
       timerChip.classList.remove('timer-ending', 'timer-paused');
-      timerChip.innerHTML = `${deckPillIcon('moon')}<span>${escapeHtml(t('sleepLast'))}</span>`;
+      setHtmlIfChanged(timerChip, `timer:sleep:${lang()}`, `${deckPillIcon('moon')}<span>${escapeHtml(t('sleepLast'))}</span>`);
       timerChip.title = t('sleepArmedMsg');
     } else {
       timerChip.classList.add('hidden');
@@ -2670,12 +2798,12 @@ function renderTimeCluster(now) {
     if (alarmPhase === 'afterglow') {
       alarmChip.classList.remove('hidden', 'alarm-preheat-chip');
       alarmChip.classList.add('alarm-afterglow');
-      alarmChip.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`;
+      setHtmlIfChanged(alarmChip, `alarm:fired:${afterglowLabel}`, `${deckPillIcon('bell')}<span>${escapeHtml(afterglowLabel || t('alarmLabel'))}</span>`);
       alarmChip.title = t('alarmFiredTip');
     } else if (state.settings.alarmTime) {
       alarmChip.classList.remove('hidden', 'alarm-afterglow');
       alarmChip.classList.toggle('alarm-preheat-chip', alarmPhase === 'preheat');
-      alarmChip.innerHTML = `${deckPillIcon('bell')}<span>${escapeHtml(state.settings.alarmTime)}</span>`;
+      setHtmlIfChanged(alarmChip, `alarm:${state.settings.alarmTime}`, `${deckPillIcon('bell')}<span>${escapeHtml(state.settings.alarmTime)}</span>`);
       alarmChip.title = t('alarmChipTip');
     } else {
       alarmChip.classList.add('hidden');
@@ -2817,11 +2945,268 @@ function startClock() {
   clockTimer = setInterval(updateClock, 500);
 }
 
+/* =========================================================================
+ * Track browser — searchable, virtualised view of everything on the deck
+ * -------------------------------------------------------------------------
+ * A deck can hold thousands of tracks, so the list renders only the rows in
+ * view (fixed row height + spacer divs) and filters on a normalised index
+ * built once per open. Korean initial-consonant queries are supported,
+ * e.g. "ㄱㅇㅇ" matches "고양이".
+ * ========================================================================= */
+const TB_ROW_HEIGHT = 46;
+const TB_OVERSCAN = 6;
+const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const CHOSUNG_SET = new Set(CHOSUNG);
+let trackBrowser = null;
+
+function toChosung(text) {
+  let out = '';
+  for (const ch of String(text)) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) out += CHOSUNG[Math.floor((code - 0xac00) / 588)];
+    else out += ch;
+  }
+  return out;
+}
+
+function isChosungQuery(query) {
+  return query.length > 0 && [...query].every((ch) => CHOSUNG_SET.has(ch));
+}
+
+function normalizeForSearch(text) {
+  return String(text || '').toLowerCase().normalize('NFC');
+}
+
+function browserItems(scope) {
+  const ids = scope === 'library'
+    ? state.library.filter((p) => !p.volatile).map((p) => p.id)
+    : state.onBoard;
+  return buildPoolForIds(ids, { includeBad: true }).map((item, index) => {
+    const haystack = normalizeForSearch(item.title + ' ' + item.channel + ' ' + item.playlistName);
+    return Object.assign({}, item, { index: index, haystack: haystack, chosung: toChosung(haystack) });
+  });
+}
+
+function filterBrowserItems(items, rawQuery) {
+  const query = normalizeForSearch(rawQuery).trim();
+  if (!query) return items;
+  const terms = query.split(/\s+/).filter(Boolean);
+  return items.filter((item) => terms.every((term) => (
+    isChosungQuery(term) ? item.chosung.includes(term) : item.haystack.includes(term)
+  )));
+}
+
+function highlightMatch(text, rawQuery) {
+  const safe = escapeHtml(text);
+  const query = normalizeForSearch(rawQuery).trim();
+  if (!query) return safe;
+  const term = query.split(/\s+/).filter(Boolean)[0];
+  if (!term || isChosungQuery(term)) return safe;
+  const at = normalizeForSearch(text).indexOf(term);
+  if (at < 0) return safe;
+  return escapeHtml(text.slice(0, at)) + '<mark>' + escapeHtml(text.slice(at, at + term.length)) + '</mark>' + escapeHtml(text.slice(at + term.length));
+}
+
+function trackBrowserFlow() {
+  const initialScope = state.onBoard.length ? 'board' : 'library';
+  els.modal.classList.add('tb-modal');
+  showModal(t('tbTitle'), [
+    '<div class="tb-wrap">',
+    '  <div class="tb-head">',
+    '    <div class="tb-search-box">',
+    '      <svg class="tb-search-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>',
+    '      <input id="tbSearch" class="text-input tb-search" type="text" autocomplete="off" spellcheck="false" placeholder="' + escapeAttr(t('tbPlaceholder')) + '" />',
+    '      <button id="tbClear" class="tb-clear hidden" type="button" title="' + escapeAttr(t('reset')) + '">×</button>',
+    '    </div>',
+    '    <div class="tb-scopes">',
+    '      <button class="mini-action tb-scope" data-scope="board" type="button">' + t('tbScopeBoard') + '</button>',
+    '      <button class="mini-action tb-scope" data-scope="library" type="button">' + t('tbScopeLibrary') + '</button>',
+    '    </div>',
+    '  </div>',
+    '  <div id="tbList" class="tb-list" tabindex="0">',
+    '    <div id="tbSpacerTop"></div>',
+    '    <div id="tbRows"></div>',
+    '    <div id="tbSpacerBottom"></div>',
+    '  </div>',
+    '  <div class="tb-foot"><span id="tbCount" class="tb-count"></span><span class="tb-hint">' + t('tbHint') + '</span></div>',
+    '</div>',
+  ].join('\n'), { focus: '#tbSearch' });
+
+  const listEl = $('#tbList');
+  const rowsEl = $('#tbRows');
+  const topEl = $('#tbSpacerTop');
+  const bottomEl = $('#tbSpacerBottom');
+  const searchEl = $('#tbSearch');
+  const countEl = $('#tbCount');
+  const clearEl = $('#tbClear');
+
+  trackBrowser = { scope: initialScope, query: '', items: [], filtered: [], sel: 0, renderedRange: '', cols: 1 };
+
+  // A docked deck is wide but very short, so the list flows into as many
+  // columns as fit (>=330px each). One column in side docks, three or four in
+  // a full-width bottom dock — the same virtualisation covers every case.
+  const computeCols = () => Math.max(1, Math.min(4, Math.floor((listEl.clientWidth || 360) / 330)));
+
+  const currentKey = () => (currentItem ? itemKey(currentItem) : '');
+
+  const rowHtml = (item, index) => {
+    const isCurrent = itemKey(item) === currentKey();
+    const dur = item.duration > 0 ? formatTime(item.duration) : '–';
+    const meta = [item.playlistName, item.channel].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+    const cls = 'tb-row' + (isCurrent ? ' current' : '') + (index === trackBrowser.sel ? ' selected' : '');
+    const lead = isCurrent ? '<span class="tb-playing" aria-hidden="true"></span>' : String(index + 1);
+    const thumbStyle = item.thumbnail ? ' style="background-image:url(\'' + escapeAttr(item.thumbnail) + '\')"' : '';
+    return '<button class="' + cls + '" data-i="' + index + '" type="button">'
+      + '<span class="tb-idx">' + lead + '</span>'
+      + '<span class="tb-thumb"' + thumbStyle + '></span>'
+      + '<span class="tb-main"><span class="tb-title">' + highlightMatch(item.title || item.videoId, trackBrowser.query) + '</span>'
+      + '<span class="tb-meta">' + highlightMatch(meta, trackBrowser.query) + '</span></span>'
+      + '<span class="tb-dur">' + dur + '</span></button>';
+  };
+
+  const paint = (force) => {
+    const total = trackBrowser.filtered.length;
+    const cols = computeCols();
+    if (cols !== trackBrowser.cols) { trackBrowser.cols = cols; force = true; }
+    rowsEl.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+    const gridRows = Math.ceil(total / cols);
+    const viewport = listEl.clientHeight || 240;
+    const firstRow = Math.max(0, Math.floor(listEl.scrollTop / TB_ROW_HEIGHT) - TB_OVERSCAN);
+    const lastRow = Math.min(gridRows, firstRow + Math.ceil(viewport / TB_ROW_HEIGHT) + TB_OVERSCAN * 2);
+    const first = firstRow * cols;
+    const last = Math.min(total, lastRow * cols);
+    const rangeKey = [first, last, total, cols, trackBrowser.sel, currentKey()].join(':');
+    if (!force && rangeKey === trackBrowser.renderedRange) return;
+    trackBrowser.renderedRange = rangeKey;
+    topEl.style.height = (firstRow * TB_ROW_HEIGHT) + 'px';
+    bottomEl.style.height = Math.max(0, (gridRows - lastRow) * TB_ROW_HEIGHT) + 'px';
+    rowsEl.innerHTML = total === 0
+      ? '<div class="tb-empty">' + escapeHtml(trackBrowser.items.length ? t('tbNoMatch') : t('tbEmptyScope')) + '</div>'
+      : trackBrowser.filtered.slice(first, last).map((item, i) => rowHtml(item, first + i)).join('');
+    countEl.textContent = total.toLocaleString() + ' ' + t('tbTracks');
+  };
+
+  const applyFilter = (keepScroll) => {
+    trackBrowser.filtered = filterBrowserItems(trackBrowser.items, trackBrowser.query);
+    trackBrowser.sel = Math.min(trackBrowser.sel, Math.max(0, trackBrowser.filtered.length - 1));
+    if (!keepScroll) listEl.scrollTop = 0;
+    clearEl.classList.toggle('hidden', !trackBrowser.query);
+    paint(true);
+  };
+
+  const setScope = (scope) => {
+    trackBrowser.scope = scope;
+    trackBrowser.items = browserItems(scope);
+    trackBrowser.sel = 0;
+    document.querySelectorAll('.tb-scope').forEach((btn) => btn.classList.toggle('active', btn.dataset.scope === scope));
+    applyFilter(false);
+  };
+
+  const revealSelection = () => {
+    const top = Math.floor(trackBrowser.sel / trackBrowser.cols) * TB_ROW_HEIGHT;
+    const bottom = top + TB_ROW_HEIGHT;
+    if (top < listEl.scrollTop) listEl.scrollTop = top;
+    else if (bottom > listEl.scrollTop + listEl.clientHeight) listEl.scrollTop = bottom - listEl.clientHeight;
+  };
+
+  const moveSelection = (delta) => {
+    if (!trackBrowser.filtered.length) return;
+    trackBrowser.sel = Math.max(0, Math.min(trackBrowser.filtered.length - 1, trackBrowser.sel + delta));
+    revealSelection();
+    paint(true);
+  };
+
+  const playIndex = (index) => {
+    const item = trackBrowser.filtered[index];
+    if (!item) return;
+    trackBrowser.sel = index;
+    playTrackFromBrowser(item);
+    paint(true);
+  };
+
+  let filterTimer = null;
+  if (searchEl) {
+    searchEl.addEventListener('input', () => {
+      trackBrowser.query = searchEl.value;
+      clearTimeout(filterTimer);
+      filterTimer = window.setTimeout(() => applyFilter(false), 70);
+    });
+  }
+  if (clearEl) {
+    clearEl.addEventListener('click', () => {
+      searchEl.value = '';
+      trackBrowser.query = '';
+      applyFilter(false);
+      searchEl.focus();
+    });
+  }
+  document.querySelectorAll('.tb-scope').forEach((btn) => {
+    btn.addEventListener('click', () => setScope(btn.dataset.scope));
+  });
+  if (listEl) listEl.addEventListener('scroll', () => paint(false));
+  if (rowsEl) {
+    rowsEl.addEventListener('click', (e) => {
+      const row = e.target.closest ? e.target.closest('.tb-row') : null;
+      if (row) playIndex(Number(row.dataset.i));
+    });
+  }
+  const onKeydown = (e) => {
+    const cols = trackBrowser.cols || 1;
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(cols); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-cols); }
+    else if (e.key === 'ArrowRight' && cols > 1) { e.preventDefault(); moveSelection(1); }
+    else if (e.key === 'ArrowLeft' && cols > 1) { e.preventDefault(); moveSelection(-1); }
+    else if (e.key === 'PageDown') { e.preventDefault(); moveSelection(cols * 4); }
+    else if (e.key === 'PageUp') { e.preventDefault(); moveSelection(-cols * 4); }
+    else if (e.key === 'Home') { e.preventDefault(); moveSelection(-trackBrowser.filtered.length); }
+    else if (e.key === 'End') { e.preventDefault(); moveSelection(trackBrowser.filtered.length); }
+    else if (e.key === 'Enter') { e.preventDefault(); playIndex(trackBrowser.sel); }
+    else if (e.key === 'Escape') { e.preventDefault(); hideModal(); }
+  };
+  if (searchEl) searchEl.addEventListener('keydown', onKeydown);
+  if (listEl) listEl.addEventListener('keydown', onKeydown);
+
+  if (window.ResizeObserver && listEl) {
+    const ro = new ResizeObserver(() => paint(true));
+    ro.observe(listEl);
+    trackBrowser.dispose = () => ro.disconnect();
+  }
+
+  setScope(initialScope);
+  window.setTimeout(() => paint(true), 60);
+}
+
+// Playing straight from the browser keeps the queue coherent: sequential mode
+// continues from the picked track and the shuffle bag stops repeating it.
+function playTrackFromBrowser(item) {
+  if (!ready) { setStatus('WAIT'); return; }
+  const pool = buildActivePool();
+  const key = itemKey(item);
+  const idx = pool.findIndex((poolItem) => itemKey(poolItem) === key);
+  if (idx >= 0) sequentialIndex = idx;
+  else if (pool.length) window.setTimeout(() => setSubtitle(t('tbOffBoard')), 1400);
+  queueBag = queueBag.filter((queued) => itemKey(queued) !== key);
+  if (currentItem && itemKey(currentItem) !== key) historyStack.push(currentItem);
+  playItem(item);
+}
+
 function wireEvents() {
   els.addBtn.addEventListener('click', addPlaylistFlow);
   els.apiBtn.addEventListener('click', apiKeyFlow);
   els.themeBtn?.addEventListener('click', cycleTheme);
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
+  els.searchBtn?.addEventListener('click', trackBrowserFlow);
+  window.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd+F (and plain F3) open the track browser from anywhere.
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+    if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') || e.key === 'F3') {
+      e.preventDefault();
+      if (els.modal.classList.contains('hidden')) trackBrowserFlow();
+      else if (trackBrowser) $('#tbSearch')?.focus();
+    } else if (e.key === 'Escape' && !els.modal.classList.contains('hidden') && !inField) {
+      hideModal();
+    }
+  });
   els.deckClock?.addEventListener('click', timeCardFlow);
   els.bigClock?.addEventListener('click', timeCardFlow);
   els.timerChip?.addEventListener('click', timeCardFlow);
@@ -2932,6 +3317,7 @@ function wireEvents() {
   new ResizeObserver(updateLayoutClass).observe(document.body);
 
   window.addEventListener('beforeunload', () => {
+    try { flushLocalSave(); } catch {}
     try { window.deckAPI?.savePersistentState?.({ schemaVersion: 24, app: 'YTDeckPlayer', savedAt: new Date().toISOString(), ...stateForPersistence() }); } catch {}
   });
 
@@ -2954,6 +3340,7 @@ function sleep(ms) {
 async function gracefulClose() {
   if (gracefulClosing) return;
   gracefulClosing = true;
+  try { flushLocalSave(); } catch {}
   try {
     els.closeBtn.disabled = true;
     els.closeBtn.textContent = '...';

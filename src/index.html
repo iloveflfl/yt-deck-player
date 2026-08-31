@@ -10,7 +10,7 @@
 <body>
   <div id="app" class="deck-shell">
     <div class="deck-topline" data-drag-zone>
-      <div class="brand"><span class="brand-dot"></span> YT Deck Player <span class="version-pill">v2.9</span><button id="themeBtn" class="tiny-btn theme-chip" title="테마 순환"><span class="theme-ico" aria-hidden="true">◐</span><span>Theme:Aurora</span></button></div>
+      <div class="brand"><span class="brand-dot"></span> YT Deck Player <span class="version-pill">v3.0</span><button id="themeBtn" class="tiny-btn theme-chip" title="테마 순환"><span class="theme-ico" aria-hidden="true">◐</span><span>Theme:Aurora</span></button></div>
       <div class="top-actions">
         <span id="deckClock" class="clock-pill" title="현재 시각">--:--</span>
         <span id="statusText" class="status-pill">READY</span>
@@ -76,7 +76,10 @@
         <div class="chip-zone onboard-zone" id="onBoardZone">
           <div class="zone-head">
             <span data-i18n="onBoard">ON BOARD</span>
-            <span id="poolCount" class="muted">0 tracks</span>
+            <div class="zone-tools">
+              <span id="poolCount" class="muted">0 tracks</span>
+              <button id="searchBtn" class="mini-action search-action" title="트랙 찾기 (Ctrl+F)" aria-label="트랙 찾기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg></button>
+            </div>
           </div>
           <div id="onBoardChips" class="chip-row onboard-row"></div>
         </div>

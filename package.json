@@ -1,7 +1,7 @@
 {
   "name": "yt-deck-player",
-  "version": "2.9.2",
-  "description": "Responsive frameless YouTube tabletop audio deck v2.8 with Crayon Pastel theme trio, brighter light themes, smoother continuous progress interpolation, rewind-on-end animation, theme chip, pin icon, and polished media controls.",
+  "version": "3.0.0",
+  "description": "Responsive frameless YouTube tabletop audio deck v3.0 with a searchable virtualised track browser, indexed play pools, 19 themes plus custom themes, edge docking with AppBar work-area reservation, and a clock/sleep-timer/silent-alarm time cluster.",
   "main": "src/main.js",
   "author": "YT Deck Player v2.3",
   "license": "MIT",

@@ -1658,3 +1658,129 @@ body[data-dock="bottom"].is-low .theme-form,
 body[data-dock="bottom"].is-mini .theme-form { grid-template-columns: repeat(3, minmax(180px, 1fr)) auto; gap: 6px; }
 body[data-dock="bottom"].is-low .ct-saved-list,
 body[data-dock="bottom"].is-mini .ct-saved-list { max-height: 74px; }
+
+/* =========================================================================
+ * Track browser (v3.0) — searchable, virtualised track list
+ * Rows are a fixed 46px so the list can render only what is on screen.
+ * Every colour resolves through theme vars, so all themes style it for free.
+ * ========================================================================= */
+.zone-tools { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 0 auto; }
+.search-action { min-width: 26px; padding: 0 6px; color: var(--muted); }
+.search-action svg { width: 13px; height: 13px; fill: currentColor; display: block; }
+.search-action:hover { color: var(--accent); }
+
+.tb-wrap { display: flex; flex-direction: column; gap: 8px; padding: clamp(7px, 1.1vh, 12px); min-height: 0; }
+.tb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tb-search-box { position: relative; flex: 1 1 240px; min-width: 0; display: flex; align-items: center; }
+.tb-search-ico {
+  position: absolute; left: 10px; width: 15px; height: 15px;
+  fill: var(--muted); pointer-events: none;
+}
+.tb-search { width: 100%; height: 34px; padding: 0 30px 0 31px; border-radius: 12px; }
+.tb-search:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.tb-clear {
+  position: absolute; right: 7px; width: 20px; height: 20px; line-height: 18px;
+  border: 0; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: 900;
+  color: var(--muted); background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.tb-clear:hover { color: var(--text); }
+.tb-scopes { display: flex; gap: 4px; flex: 0 0 auto; }
+.tb-scope { height: 26px; padding: 0 10px; font-size: 10px; }
+.tb-scope.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.tb-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel2) 55%, transparent);
+  outline: none;
+}
+.tb-list::-webkit-scrollbar { width: 8px; }
+.tb-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 34%, transparent); border-radius: 999px; }
+.tb-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 46px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 110ms ease;
+}
+.tb-row + .tb-row { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--line) 60%, transparent); }
+.tb-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tb-row.selected { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.tb-row.current { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tb-idx {
+  flex: 0 0 26px; text-align: right; font-size: 10px; font-weight: 900;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.tb-playing {
+  display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+  background: var(--accent); animation: tb-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tb-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.72); } }
+.tb-thumb {
+  flex: 0 0 54px; height: 32px; border-radius: 7px;
+  background-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background-size: cover; background-position: center;
+}
+.tb-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tb-title { font-size: 12px; font-weight: 900; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-meta { font-size: 10px; color: var(--muted); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-row mark {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: inherit; border-radius: 3px; padding: 0 1px;
+}
+.tb-dur { flex: 0 0 auto; font-size: 10px; font-weight: 900; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tb-empty { padding: 26px 12px; text-align: center; color: var(--muted); font-size: 11px; font-weight: 800; }
+.tb-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tb-count { font-size: 11px; font-weight: 900; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tb-hint { font-size: 10px; color: var(--muted); }
+
+body.is-low .tb-list, body.is-mini .tb-list { max-height: calc(100vh - 128px); min-height: 84px; }
+body.is-low .tb-hint, body.is-mini .tb-hint { display: none; }
+body.is-dock-side .tb-scopes, body.is-narrow .tb-scopes { flex: 1 1 100%; }
+body.is-dock-side .tb-thumb, body.is-narrow .tb-thumb { display: none; }
+body.is-low .search-action, body.is-mini .search-action { min-width: 22px; padding: 0 4px; }
+
+body[data-theme^="crayon"] .tb-list { border-style: dashed; }
+body[data-theme="robot"] .tb-list, body[data-theme="robot"] .tb-search, body[data-theme="robot"] .tb-thumb { border-radius: 4px; }
+body[data-theme="glass"] .tb-list { background: rgba(255,255,255,.06); backdrop-filter: blur(6px); }
+body.light-theme .tb-list { background: color-mix(in srgb, white 62%, transparent); }
+body.light-theme .tb-row:hover { background: color-mix(in srgb, var(--accent) 14%, white); }
+
+/* multi-column flow: the list uses the deck's width so a short bottom dock
+   still shows a useful number of tracks */
+#tbRows { display: grid; gap: 0; align-content: start; }
+.tb-row { min-width: 0; }
+.tb-empty { grid-column: 1 / -1; }
+.tb-search-box { flex: 0 1 420px; }
+.tb-head { justify-content: space-between; }
+.modal.tb-modal .modal-card { display: flex; flex-direction: column; }
+.modal.tb-modal #modalBody { flex: 1 1 auto; min-height: 0; display: flex; }
+.modal.tb-modal .tb-wrap { flex: 1 1 auto; width: 100%; }
+body.is-low .modal.tb-modal .tb-list,
+body.is-mini .modal.tb-modal .tb-list { max-height: calc(100vh - 104px); }
+#tbRows { column-gap: 10px; row-gap: 0; }
+.tb-row { padding-right: 8px; }
+
+/* side dock stretches top-bar buttons full width; the modal close button must
+   stay a button, not a bar */
+body.is-dock-side .modal-head .tiny-btn { width: auto; min-width: 30px; padding: 0 9px; }
+body.is-dock-side .modal-head { gap: 8px; }
+body.is-dock-side .modal-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

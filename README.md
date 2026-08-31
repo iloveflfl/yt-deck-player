@@ -22,6 +22,8 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 
 - **덱 도킹**: 하단/좌/우 가장자리에 도킹하거나 자유 배치. Windows AppBar로 작업영역을 예약해
   다른 최대화 창이 덱을 가리지 않습니다(SPACE 버튼). 멀티모니터·혼합 DPI 환경 지원.
+- **트랙 브라우저 + 검색**: 온보드 검색 버튼 또는 Ctrl+F로 열립니다. 곡·아티스트·플레이리스트를 즉시 검색하고(한글 초성 검색 지원),
+  화살표로 이동해 Enter나 클릭으로 바로 재생합니다. 수천 곡도 가상 스크롤로 부드럽고, 덱 너비에 맞춰 1~4열로 흐릅니다.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
@@ -52,6 +54,7 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 - `SPACE`: 작업영역 예약(AppBar) 토글. `PIN`: 항상 위.
 - 테마 칩 클릭: 테마 순환 / 우클릭: 커스텀 테마 에디터.
 - 칩 우클릭: 온보드 토글·이름 변경·곡 목록 갱신·삭제.
+- `Ctrl+F`(또는 ON BOARD의 돋보기): 트랙 브라우저. 초성 검색·↑↓←→ 이동·Enter 재생·Esc 닫기.
 
 ---
 
@@ -62,6 +65,10 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 - **Edge docking**: Dock to the bottom/left/right edge or float freely. On Windows the deck
   registers an AppBar so maximized windows never cover it (SPACE button). Multi-monitor and
   mixed-DPI aware.
+- **Track browser with search**: Open it from the on-board search button or Ctrl+F. Search titles,
+  artists, and playlists instantly (including Korean initial-consonant queries), move with the arrow
+  keys, and play with Enter or a click. Thousands of tracks stay smooth through virtualised rendering,
+  and the list flows into 1-4 columns to fit the deck.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
@@ -96,6 +103,7 @@ npm.cmd run dist:win # build portable exe + NSIS installer into dist/
 - `SPACE` toggles the reserved work area (AppBar). `PIN` toggles always-on-top.
 - Click the theme chip to cycle themes; right-click it to open the custom theme editor.
 - Right-click a chip for on-board toggle, rename, track refresh, and delete.
+- `Ctrl+F` (or the magnifier in ON BOARD) opens the track browser: search, arrow keys, Enter to play, Esc to close.
 
 ---
 
