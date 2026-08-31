@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, net, Tray,
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 let mainWindow = null;
 let tray = null;
@@ -14,6 +14,7 @@ let appOrigin = '';
 let applyingDockBounds = false;
 let manualResizeSinceDock = false;
 let reserveSpaceEnabled = true;
+let appBarRegisterPending = null;
 let appBarRegistered = false;
 let appBarBusy = false;
 let appBarProcess = null;
@@ -22,6 +23,7 @@ let appBarStatusFile = '';
 let lastAppBarResult = null;
 let appBarRegisterSeq = 0;
 let appBarSignature = '';
+let appBarLiveHwnd = '';
 let ignoreDisplayMetricsUntil = 0;
 let displayMetricsTimer = null;
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -47,6 +49,22 @@ function documentsStorePath() {
   const docs = app.getPath('documents');
   const dir = path.join(docs, 'YTDeckPlayer');
   return { dir, file: path.join(dir, 'library-state.json') };
+}
+
+// The renderer only reports the SPACE preference after it boots. Registering
+// an AppBar before that and tearing it down a second later raced the helper:
+// the teardown could land while registration was still in flight, leaving a
+// reserved strip that the app no longer believed in (an untracked ghost).
+function readPersistedReserveSpace() {
+  const { file } = documentsStorePath();
+  for (const candidate of [file, `${file}.bak`]) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      const value = parsed && parsed.settings && parsed.settings.reserveSpace;
+      if (typeof value === 'boolean') return value;
+    } catch {}
+  }
+  return true;
 }
 
 
@@ -349,13 +367,70 @@ function stopResidentAppBar() {
   });
 }
 
+// Fire-and-forget wrapper around the awaited teardown so every caller uses the
+// same, race-free removal path.
 function unregisterAppBar() {
+  unregisterAppBarAndWait(2500).catch((err) => appendAppBarLog('AppBar teardown failed', err.message || String(err)));
+  lastAppBarResult = { ok: true, action: 'remove', message: 'AppBar removal started.' };
+  return lastAppBarResult;
+}
+
+// Wait until the reserved work area is actually released before continuing.
+// Quitting (or switching SPACE off) must not depend on an orphaned helper
+// noticing our death later - that is what left a ghost strip on the desktop.
+async function unregisterAppBarAndWait(timeoutMs = 2500) {
   appBarRegisterSeq += 1;
   ignoreDisplayMetricsUntil = Date.now() + 1400;
-  stopResidentAppBar();
-  clearAppBarHwndRecord();
-  lastAppBarResult = { ok: true, action: 'remove', message: 'AppBar stop signal sent.' };
+  const hwnd = appBarLiveHwnd;
+  appBarLiveHwnd = '';
+  const hadAppBar = Boolean(hwnd) || appBarRegistered || Boolean(appBarProcess) || Boolean(appBarRegisterPending);
+  // Removing a half-finished registration is what strands a strip: the shell
+  // accepts it moments later and nothing is left to take it back.
+  if (appBarRegisterPending) {
+    await Promise.race([
+      appBarRegisterPending.catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 6000)),
+    ]);
+  }
+  const liveHwnd = hwnd || appBarLiveHwnd;
+  appBarLiveHwnd = '';
+  const stopped = stopResidentAppBar();
+  if (!hadAppBar) {
+    lastAppBarResult = { ok: true, action: 'remove', message: 'No AppBar to remove.' };
+    return lastAppBarResult;
+  }
+  let timer = null;
+  const timedOut = await Promise.race([
+    stopped.then(() => false),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(true), timeoutMs); }),
+  ]);
+  if (timer) clearTimeout(timer);
+  // Belt and braces: if the resident helper did not confirm in time, remove the
+  // appbar with a blocking call so the desktop is restored while this process
+  // is still alive.
+  if (timedOut) removeAppBarSync(liveHwnd);
+  else forgetAppBarHwnd(liveHwnd);
+  lastAppBarResult = { ok: true, action: 'remove', message: 'AppBar removed.' };
   return lastAppBarResult;
+}
+
+function removeAppBarSync(hwnd) {
+  if (!hwnd || process.platform !== 'win32') return false;
+  const helper = appBarHelperPath();
+  if (!fs.existsSync(helper)) return false;
+  try {
+    execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', 'remove', '-Hwnd', String(hwnd)], {
+      windowsHide: true,
+      stdio: 'ignore',
+      timeout: 8000,
+    });
+    appendAppBarLog('Synchronous AppBar removal completed', { hwnd });
+    forgetAppBarHwnd(hwnd);
+    return true;
+  } catch (err) {
+    appendAppBarLog('Synchronous AppBar removal failed', { hwnd, message: err.message || String(err) });
+    return false;
+  }
 }
 
 // --- stale AppBar self-healing -------------------------------------------
@@ -367,40 +442,90 @@ function appBarHwndRecordPath() {
   return path.join(documentsStorePath().dir, 'appbar-last.json');
 }
 
-function recordAppBarHwnd(hwnd) {
+// The record is a LIST, not a single slot: several crashed runs can each leave
+// their own reservation behind, and cleaning only the newest one strands the
+// rest, so the desktop keeps a strip that nobody owns any more.
+function readAppBarRecords() {
   try {
+    const parsed = JSON.parse(fs.readFileSync(appBarHwndRecordPath(), 'utf8'));
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    return list
+      .map((rec) => ({ hwnd: String((rec && rec.hwnd) || '').trim(), pid: rec && rec.pid, at: rec && rec.at }))
+      .filter((rec) => /^[0-9]+$/.test(rec.hwnd));
+  } catch {
+    return [];
+  }
+}
+
+function writeAppBarRecords(list) {
+  try {
+    if (!list.length) { safeUnlink(appBarHwndRecordPath()); return; }
     const { dir } = documentsStorePath();
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(appBarHwndRecordPath(), JSON.stringify({ hwnd, pid: process.pid, at: Date.now() }), 'utf8');
+    fs.writeFileSync(appBarHwndRecordPath(), JSON.stringify(list.slice(-16)), 'utf8');
   } catch {}
 }
 
-function clearAppBarHwndRecord() {
-  safeUnlink(appBarHwndRecordPath());
+function recordAppBarHwnd(hwnd) {
+  const key = String(hwnd || '').trim();
+  if (!key) return;
+  const list = readAppBarRecords().filter((rec) => rec.hwnd !== key);
+  list.push({ hwnd: key, pid: process.pid, at: Date.now() });
+  writeAppBarRecords(list);
 }
+
+function forgetAppBarHwnd(hwnd) {
+  const key = String(hwnd || '').trim();
+  if (!key) return;
+  writeAppBarRecords(readAppBarRecords().filter((rec) => rec.hwnd !== key));
+}
+
+
 
 function removeStaleAppBarFromPreviousRun() {
   if (process.platform !== 'win32') return;
   try {
-    const file = appBarHwndRecordPath();
-    if (!fs.existsSync(file)) return;
-    const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
-    safeUnlink(file);
-    const hwnd = String(rec?.hwnd || '').trim();
-    if (!hwnd || !/^\d+$/.test(hwnd) || hwnd === hwndToString()) return;
+    const records = readAppBarRecords();
+    if (!records.length) return;
     const helper = appBarHelperPath();
     if (!fs.existsSync(helper)) return;
-    appendAppBarLog('Removing stale AppBar left by a previous run', { hwnd });
-    spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', 'remove', '-Hwnd', hwnd], {
-      windowsHide: true,
-      stdio: 'ignore',
-    });
+    const mine = hwndToString();
+    const survivors = [];
+    for (const rec of records) {
+      if (rec.hwnd === mine) { survivors.push(rec); continue; }
+      appendAppBarLog('Removing stale AppBar left by a previous run', rec);
+      // Blocking on purpose: this runs once at startup before any dock is
+      // registered, and a surviving ghost strip corrupts every later dock
+      // geometry. Records are dropped only once removal actually succeeded.
+      try {
+        execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', 'remove', '-Hwnd', rec.hwnd], {
+          windowsHide: true,
+          stdio: 'ignore',
+          timeout: 8000,
+        });
+      } catch (err) {
+        appendAppBarLog('Stale AppBar removal failed; keeping record', { hwnd: rec.hwnd, message: err.message || String(err) });
+        survivors.push(rec);
+      }
+    }
+    writeAppBarRecords(survivors);
   } catch (err) {
     appendAppBarLog('Stale AppBar cleanup failed', err.message || String(err));
   }
 }
 
 async function registerAppBarOnce(mode, targetBounds) {
+  let settle = null;
+  appBarRegisterPending = new Promise((resolve) => { settle = resolve; });
+  try {
+    return await registerAppBarOnceInner(mode, targetBounds);
+  } finally {
+    appBarRegisterPending = null;
+    settle();
+  }
+}
+
+async function registerAppBarOnceInner(mode, targetBounds) {
   const requestSeq = ++appBarRegisterSeq;
   if (process.platform !== 'win32') {
     const result = { ok: true, unsupported: true, message: 'Windows AppBar is only available on Windows.' };
@@ -437,6 +562,11 @@ async function registerAppBarOnce(mode, targetBounds) {
   appBarStatusFile = paths.status;
 
   const args = appBarPowerShellArgs('register', mode, targetBounds, paths.status, paths.stop);
+  // Record BEFORE the shell can accept the reservation. A crash between the
+  // spawn and the success callback would otherwise leave a strip that no
+  // record points at, and nothing could ever clean it up.
+  appBarLiveHwnd = hwnd;
+  recordAppBarHwnd(hwnd);
   appendAppBarLog('Starting AppBar helper', { helper, args });
   const child = spawn('powershell.exe', args, {
     windowsHide: true,
@@ -495,11 +625,13 @@ async function registerAppBarOnce(mode, targetBounds) {
   if (!result.ok) {
     lastAppBarResult = result;
     stopResidentAppBar();
+    removeAppBarSync(hwnd);
+    appBarLiveHwnd = '';
     return result;
   }
   lastAppBarResult = result;
   appBarRegistered = true;
-  recordAppBarHwnd(hwnd);
+  appBarLiveHwnd = hwnd;
   return result;
 }
 
@@ -608,7 +740,9 @@ async function cycleDockMode() {
 async function setReserveSpaceEnabled(value) {
   reserveSpaceEnabled = Boolean(value);
   if (!reserveSpaceEnabled) {
-    unregisterAppBar();
+    // Wait for the shell to hand the strip back before repositioning, so the
+    // deck is not laid out against a work area that is still shrinking.
+    await unregisterAppBarAndWait(2000);
     if (dockMode !== 'free' && mainWindow && !mainWindow.isDestroyed()) {
       applyingDockBounds = true;
       mainWindow.setBounds(deckBoundsForDisplay(getBestDisplay(false), dockMode));
@@ -849,6 +983,8 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
   removeStaleAppBarFromPreviousRun();
+  reserveSpaceEnabled = readPersistedReserveSpace();
+  appendAppBarLog('Startup reserve-space preference', { reserveSpaceEnabled });
   await createWindow();
   createTray();
 
@@ -881,8 +1017,26 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Releasing the reserved work area must finish while this process is still
+// alive. Quitting first and trusting a detached helper to notice our death
+// later left a ghost strip whenever that helper was killed along with us.
+let appBarTeardownDone = false;
+app.on('before-quit', (event) => {
+  if (appBarTeardownDone) return;
+  if (process.platform !== 'win32' || !(appBarRegistered || appBarProcess || appBarLiveHwnd)) {
+    appBarTeardownDone = true;
+    return;
+  }
+  event.preventDefault();
+  unregisterAppBarAndWait(2500)
+    .catch((err) => appendAppBarLog('AppBar teardown failed on quit', err.message || String(err)))
+    .then(() => { appBarTeardownDone = true; app.quit(); });
+});
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  // Last resort for paths that bypass before-quit (e.g. app.exit()).
+  try { if (appBarRegistered || appBarProcess || appBarLiveHwnd) removeAppBarSync(appBarLiveHwnd || hwndToString()); } catch {}
   try { unregisterAppBar(); } catch {}
   try { tray?.destroy(); } catch {}
   if (localServer) localServer.close();

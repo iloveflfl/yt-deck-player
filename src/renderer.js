@@ -3300,7 +3300,13 @@ function wireEvents() {
   window.deckAPI?.onLockChanged?.((payload) => {
     const mode = typeof payload === 'string' ? payload : (payload?.mode || (payload ? 'bottom' : 'free'));
     document.body.dataset.dock = mode;
-    if (typeof payload?.reserveSpaceEnabled === 'boolean') state.settings.reserveSpace = payload.reserveSpaceEnabled;
+    // The shutdown routine releases the reserved strip before the fade-out.
+    // That is a transient teardown, not the user's choice, so it must never be
+    // written back as the saved preference (the deck used to start with SPACE
+    // switched off after every normal close).
+    if (typeof payload?.reserveSpaceEnabled === 'boolean' && !gracefulClosing) {
+      state.settings.reserveSpace = payload.reserveSpaceEnabled;
+    }
     els.dockBtn.classList.toggle('active', mode !== 'free');
     els.dockBtn.textContent = mode === 'bottom' ? 'DOCK B' : mode === 'right' ? 'DOCK R' : mode === 'left' ? 'DOCK L' : 'DOCK';
     updateReserveButton(payload);

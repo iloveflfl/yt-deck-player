@@ -254,12 +254,15 @@ function Parent-IsAlive() {
   try { $null = Get-Process -Id $ParentPid -ErrorAction Stop; return $true } catch { return $false }
 }
 
-function Wait-Until-Stop() {
+function Wait-Until-Stop([IntPtr]$hwnd) {
   if (-not $KeepAlive) { return }
   while ($true) {
     if (-not [string]::IsNullOrWhiteSpace($StopFile) -and [System.IO.File]::Exists($StopFile)) { break }
     if (-not (Parent-IsAlive)) { break }
-    Start-Sleep -Milliseconds 250
+    # The reservation belongs to this window; once it is destroyed the strip
+    # must be handed back immediately instead of waiting for the parent to die.
+    if (-not [YTDeckAppBarNative]::IsWindow($hwnd)) { break }
+    Start-Sleep -Milliseconds 200
   }
 }
 
@@ -311,7 +314,7 @@ try {
   $status = StatusObject $ok $message ([ref]$data) $removeResult $newResult $queryResult $setResult
   Write-Status $status
   if ($ok -and $KeepAlive) {
-    Wait-Until-Stop
+    Wait-Until-Stop $data.hWnd
     try { [void][YTDeckAppBarNative]::SHAppBarMessage([YTDeckAppBarNative]::ABM_REMOVE, [ref]$data) } catch {}
     Write-Status @{ ok = $true; action = 'removed'; hwnd = $Hwnd; message = 'AppBar removed after stop signal.' }
     exit 0
