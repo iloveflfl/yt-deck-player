@@ -1888,3 +1888,24 @@ body.yt-mode .preview-panel::after {
 }
 body.yt-mode .progress-wrap { opacity: .75; cursor: default; }
 body.yt-mode #statusText { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2) 40%, transparent); }
+
+/* age-restricted tracks are handed to the user's own browser */
+body.browser-mode #statusText {
+  color: var(--accent2);
+  border-color: color-mix(in srgb, var(--accent2) 45%, transparent);
+  background: color-mix(in srgb, var(--accent2) 12%, transparent);
+}
+body.browser-mode .preview-fallback { display: flex !important; }
+body.browser-mode .track-sub { color: color-mix(in srgb, var(--accent2) 70%, var(--text)); }
+.account-form .text-input { width: 100%; }
+
+/* a disabled action must not look clickable */
+.file-pick-btn:disabled,
+.mini-action:disabled,
+.primary-action:disabled,
+.ghost-action:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: grayscale(.6);
+}
+.file-pick-btn:disabled:hover { filter: grayscale(.6); }

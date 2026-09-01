@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, screen, globalShortcut, session, net, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, screen, globalShortcut, session, net, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -27,7 +27,6 @@ let appBarSignature = '';
 let appBarLiveHwnd = '';
 let ignoreDisplayMetricsUntil = 0;
 let displayMetricsTimer = null;
-let ytSignInWindow = null;
 let ytView = null;
 let ytViewBounds = null;
 let ytIdleTimer = null;
@@ -1311,9 +1310,18 @@ ipcMain.handle('yt:play', async (_event, videoId) => {
   clearTimeout(ytIdleTimer);
   const view = ensureYtView();
   if (!view) return { ok: false, message: 'view unavailable' };
-  const auth = await ytSignedInInfo();
-  await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
-  return { ok: true, signedIn: auth.signedIn };
+  try {
+    await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
+  } catch (err) {
+    // Skipping to another track cancels the in-flight navigation; that is an
+    // ordinary outcome here, not a failure worth surfacing.
+    const message = String(err && err.message);
+    if (!message.includes('ERR_ABORTED')) {
+      appendAppBarLog('YouTube view load failed', message);
+      return { ok: false, message };
+    }
+  }
+  return { ok: true };
 });
 
 ipcMain.handle('yt:command', async (_event, command, value) => {
@@ -1333,106 +1341,302 @@ ipcMain.handle('yt:stop', () => {
 
 ipcMain.handle('yt:status', async () => ytSignedInInfo());
 
-ipcMain.handle('yt:signIn', async () => {
-  if (ytSignInWindow && !ytSignInWindow.isDestroyed()) {
-    ytSignInWindow.focus();
-    return { opened: true, alreadyOpen: true };
-  }
-  const parentBounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
-  const display = parentBounds ? screen.getDisplayMatching(parentBounds) : screen.getPrimaryDisplay();
-  const width = Math.min(980, Math.max(560, Math.round(display.workArea.width * 0.5)));
-  const height = Math.min(760, Math.max(520, Math.round(display.workArea.height * 0.8)));
-  ytSignInWindow = new BrowserWindow({
-    width,
-    height,
-    x: Math.round(display.workArea.x + (display.workArea.width - width) / 2),
-    y: Math.round(display.workArea.y + (display.workArea.height - height) / 2),
-    title: 'YouTube 로그인',
-    autoHideMenuBar: true,
-    backgroundColor: '#0f0f0f',
-    webPreferences: {
-      partition: YT_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  ytSignInWindow.webContents.setUserAgent(CHROME_UA);
-  ytSignInWindow.setMenuBarVisibility(false);
-  await ytSignInWindow.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F');
-
-  // Close the window by itself once the cookies show a completed sign-in.
-  const poll = setInterval(async () => {
-    if (!ytSignInWindow || ytSignInWindow.isDestroyed()) { clearInterval(poll); return; }
-    const info = await ytSignedInInfo();
-    if (!info.signedIn) return;
-    clearInterval(poll);
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-auth-changed', info);
-    setTimeout(() => { try { if (ytSignInWindow && !ytSignInWindow.isDestroyed()) ytSignInWindow.close(); } catch {} }, 900);
-  }, 1200);
-
-  ytSignInWindow.on('closed', async () => {
-    clearInterval(poll);
-    ytSignInWindow = null;
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-auth-changed', await ytSignedInInfo());
-  });
-  return { opened: true };
-});
-
-ipcMain.handle('yt:signOut', async () => {
-  try {
-    await ytSession().clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage'] });
-  } catch (err) {
-    return { signedIn: false, error: err.message || String(err) };
-  }
-  return ytSignedInInfo();
-});
+// The interactive cookie sign-in that used to live here is gone on purpose:
+// Google blocks credential entry in app-embedded windows, and defeating that
+// check is exactly what a phishing app would do. Account access now goes
+// through OAuth in the user's own browser instead (see below).
 
 // Lists the playlists that belong to the signed-in account (including private
 // ones). Returns ids only - the track lists are loaded through the existing
 // per-playlist import so both entry points share one code path.
-ipcMain.handle('yt:myPlaylists', async () => {
-  const auth = await ytSignedInInfo();
-  if (!auth.signedIn) return { signedIn: false, playlists: [] };
-  const html = await fetchText('https://www.youtube.com/feed/playlists?hl=en&gl=US', { Referer: 'https://www.youtube.com/' });
-  const data = extractYtInitialData(html);
-  if (!data) throw new Error('Could not read the playlists page');
-  const found = new Map();
-  walk(data, (key, value) => {
-    if (!value || typeof value !== 'object') return;
-    // Modern layout: lockupViewModel with a playlist contentId.
-    if (key === 'lockupViewModel' && value.contentId && value.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
-      const id = String(value.contentId);
-      if (found.has(id)) return;
-      const title = value.metadata?.lockupMetadataViewModel?.title?.content || id;
-      let count = 0;
-      walk(value.contentImage || {}, (k, v) => {
-        if (!count && k === 'thumbnailBadgeViewModel' && typeof v?.text === 'string') {
-          const m = /(d[d,]*)/.exec(v.text);
-          if (m) count = Number(m[1].replace(/,/g, ''));
-        }
-      });
-      const sources = value.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources
-        || value.contentImage?.thumbnailViewModel?.image?.sources;
-      const thumbnail = Array.isArray(sources) && sources.length
-        ? [...sources].sort((a, b) => (b.width || 0) - (a.width || 0))[0].url
-        : '';
-      found.set(id, { playlistId: id, title, count, thumbnail });
-    }
-    // Legacy layout kept as a fallback.
-    if ((key === 'gridPlaylistRenderer' || key === 'playlistRenderer') && value.playlistId) {
-      const id = String(value.playlistId);
-      if (found.has(id)) return;
-      found.set(id, {
-        playlistId: id,
-        title: textFrom(value.title) || id,
-        count: Number(String(textFrom(value.videoCountShortText) || textFrom(value.videoCountText) || '0').replace(/[^d]/g, '')) || 0,
-        thumbnail: bestThumb(value.thumbnail) || '',
-      });
-    }
+/* =========================================================================
+ * Google OAuth (system browser, PKCE, loopback redirect)
+ * -------------------------------------------------------------------------
+ * The sanctioned desktop flow, and the same one Slack/Spotify/VS Code use:
+ * the app never renders a password field. It opens the user's real browser,
+ * where they pick an account they are already signed into, and receives an
+ * authorisation code back on a loopback port. Only tokens ever reach the app.
+ * ========================================================================= */
+const OAUTH_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
+let oauthServer = null;
+let oauthPending = null;
+
+function oauthStorePath() {
+  return path.join(documentsStorePath().dir, 'google-oauth.json');
+}
+
+function readOauthStore() {
+  try {
+    return JSON.parse(fs.readFileSync(oauthStorePath(), 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeOauthStore(data) {
+  try {
+    const { dir } = documentsStorePath();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(oauthStorePath(), JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    appendAppBarLog('OAuth store write failed', err.message || String(err));
+  }
+}
+
+function base64url(buffer) {
+  return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function closeOauthServer() {
+  if (!oauthServer) return;
+  try { oauthServer.close(); } catch {}
+  oauthServer = null;
+}
+
+// Serves exactly one redirect and then shuts down.
+function startLoopbackServer() {
+  return new Promise((resolve, reject) => {
+    closeOauthServer();
+    const server = http.createServer((req, res) => {
+      let url;
+      try { url = new URL(req.url, 'http://127.0.0.1'); } catch { url = null; }
+      if (!url || url.pathname !== '/callback') {
+        res.writeHead(404).end('Not found');
+        return;
+      }
+      const code = url.searchParams.get('code');
+      const error = url.searchParams.get('error');
+      const state = url.searchParams.get('state');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!doctype html><meta charset="utf-8"><title>YT Deck Player</title>
+        <body style="margin:0;display:grid;place-items:center;height:100vh;font-family:system-ui,'Segoe UI',sans-serif;background:#10141f;color:#eef3ff">
+        <div style="text-align:center">
+          <div style="font-size:44px">${error ? '&#9888;' : '&#10003;'}</div>
+          <h2 style="font-weight:600">${error ? 'Sign-in cancelled' : 'YT Deck Player is connected'}</h2>
+          <p style="color:#8f9bb3">${error ? 'You can close this tab and try again.' : 'You can close this tab and go back to the deck.'}</p>
+        </div></body>`);
+      if (oauthPending) {
+        const pending = oauthPending;
+        oauthPending = null;
+        setTimeout(closeOauthServer, 300);
+        if (error) pending.reject(new Error(error));
+        else if (!code) pending.reject(new Error('no authorisation code returned'));
+        else if (state !== pending.state) pending.reject(new Error('state mismatch'));
+        else pending.resolve(code);
+      }
+    });
+    server.on('error', reject);
+    // Port 0 lets the OS pick; Google allows any loopback port for desktop apps.
+    server.listen(0, '127.0.0.1', () => {
+      oauthServer = server;
+      resolve(server.address().port);
+    });
   });
-  const playlists = [...found.values()].filter((p) => /^[A-Za-z0-9_-]+$/.test(p.playlistId) && p.playlistId !== 'LL');
-  return { signedIn: true, playlists };
+}
+
+async function oauthTokenRequest(params) {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params).toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error_description || data.error || `token HTTP ${res.status}`);
+  return data;
+}
+
+function oauthStatus() {
+  const store = readOauthStore();
+  return {
+    configured: Boolean(store.clientId),
+    connected: Boolean(store.refreshToken),
+    email: store.email || '',
+    expiresAt: store.expiresAt || 0,
+  };
+}
+
+async function oauthAccessToken() {
+  const store = readOauthStore();
+  if (!store.refreshToken) throw new Error('not connected');
+  if (store.accessToken && store.expiresAt && Date.now() < store.expiresAt - 60000) return store.accessToken;
+  const data = await oauthTokenRequest({
+    client_id: store.clientId,
+    ...(store.clientSecret ? { client_secret: store.clientSecret } : {}),
+    refresh_token: store.refreshToken,
+    grant_type: 'refresh_token',
+  });
+  store.accessToken = data.access_token;
+  store.expiresAt = Date.now() + (Number(data.expires_in || 3500) * 1000);
+  writeOauthStore(store);
+  return store.accessToken;
+}
+
+async function oauthApi(url) {
+  const token = await oauthAccessToken();
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const reason = data?.error?.message || `HTTP ${res.status}`;
+    throw new Error(reason);
+  }
+  return data;
+}
+
+async function oauthConnect() {
+  const store = readOauthStore();
+  if (!store.clientId) throw new Error('missing client id');
+  const port = await startLoopbackServer();
+  const redirectUri = `http://127.0.0.1:${port}/callback`;
+  const verifier = base64url(crypto.randomBytes(48));
+  const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+  const state = base64url(crypto.randomBytes(16));
+
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id: store.clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: OAUTH_SCOPE,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    state,
+    access_type: 'offline',
+    prompt: 'consent select_account',
+  }).toString();
+
+  const code = await new Promise((resolve, reject) => {
+    oauthPending = { resolve, reject, state };
+    shell.openExternal(authUrl).catch(reject);
+    setTimeout(() => {
+      if (oauthPending) {
+        oauthPending = null;
+        closeOauthServer();
+        reject(new Error('timed out waiting for the browser'));
+      }
+    }, 300000);
+  });
+
+  const tokens = await oauthTokenRequest({
+    client_id: store.clientId,
+    ...(store.clientSecret ? { client_secret: store.clientSecret } : {}),
+    code,
+    code_verifier: verifier,
+    grant_type: 'authorization_code',
+    redirect_uri: redirectUri,
+  });
+  store.refreshToken = tokens.refresh_token || store.refreshToken;
+  store.accessToken = tokens.access_token;
+  store.expiresAt = Date.now() + (Number(tokens.expires_in || 3500) * 1000);
+  writeOauthStore(store);
+
+  // Friendly label for the account card; failure here must not break sign-in.
+  try {
+    const channel = await oauthApi('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true');
+    store.email = channel?.items?.[0]?.snippet?.title || '';
+    writeOauthStore(store);
+  } catch {}
+  return oauthStatus();
+}
+
+ipcMain.handle('yt:oauthStatus', () => oauthStatus());
+
+ipcMain.handle('yt:oauthConfigure', (_event, clientId, clientSecret) => {
+  const store = readOauthStore();
+  store.clientId = String(clientId || '').trim();
+  store.clientSecret = String(clientSecret || '').trim();
+  // Changing the client invalidates any token issued for the previous one.
+  delete store.refreshToken;
+  delete store.accessToken;
+  delete store.expiresAt;
+  delete store.email;
+  writeOauthStore(store);
+  return oauthStatus();
+});
+
+ipcMain.handle('yt:oauthConnect', async () => {
+  try {
+    return { ok: true, status: await oauthConnect() };
+  } catch (err) {
+    closeOauthServer();
+    oauthPending = null;
+    return { ok: false, message: err.message || String(err) };
+  }
+});
+
+ipcMain.handle('yt:oauthDisconnect', () => {
+  const store = readOauthStore();
+  writeOauthStore({ clientId: store.clientId, clientSecret: store.clientSecret });
+  return oauthStatus();
+});
+
+// The account's own playlists, through the official API.
+ipcMain.handle('yt:apiPlaylists', async () => {
+  const playlists = [];
+  let pageToken = '';
+  do {
+    const url = 'https://www.googleapis.com/youtube/v3/playlists?' + new URLSearchParams({
+      part: 'snippet,contentDetails',
+      mine: 'true',
+      maxResults: '50',
+      ...(pageToken ? { pageToken } : {}),
+    }).toString();
+    const data = await oauthApi(url);
+    for (const item of data.items || []) {
+      const thumbs = item.snippet?.thumbnails || {};
+      const best = thumbs.medium || thumbs.high || thumbs.default || {};
+      playlists.push({
+        playlistId: item.id,
+        title: item.snippet?.title || item.id,
+        count: Number(item.contentDetails?.itemCount || 0),
+        thumbnail: best.url || '',
+      });
+    }
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return { connected: true, playlists };
+});
+
+// Track list for one playlist, paginated. Deleted/private entries are dropped
+// the same way the no-key importer drops them.
+ipcMain.handle('yt:apiPlaylistItems', async (_event, playlistId) => {
+  if (!/^[A-Za-z0-9_-]+$/.test(String(playlistId || ''))) throw new Error('invalid playlist id');
+  const tracks = [];
+  let pageToken = '';
+  let guard = 0;
+  do {
+    guard += 1;
+    const url = 'https://www.googleapis.com/youtube/v3/playlistItems?' + new URLSearchParams({
+      part: 'snippet,contentDetails,status',
+      playlistId,
+      maxResults: '50',
+      ...(pageToken ? { pageToken } : {}),
+    }).toString();
+    const data = await oauthApi(url);
+    for (const item of data.items || []) {
+      const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+      const title = item.snippet?.title || '';
+      if (!videoId) continue;
+      if (/^(Deleted video|Private video)$/i.test(title)) continue;
+      const thumbs = item.snippet?.thumbnails || {};
+      const best = thumbs.medium || thumbs.high || thumbs.default || {};
+      tracks.push({
+        videoId,
+        title: title || videoId,
+        channel: item.snippet?.videoOwnerChannelTitle || 'YouTube',
+        thumbnail: best.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        duration: 0,
+      });
+    }
+    pageToken = data.nextPageToken || '';
+  } while (pageToken && guard < 120);
+  return { tracks, complete: !pageToken };
+});
+
+// Age-restricted tracks can only play in a real browser session, so hand them
+// to the user's own browser where they are already signed in and verified.
+ipcMain.handle('yt:openExternal', async (_event, videoId) => {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false };
+  await shell.openExternal(`https://www.youtube.com/watch?v=${videoId}`);
+  return { ok: true };
 });
 
 ipcMain.handle('deck:loadPersistentState', () => readPersistentStateFile());

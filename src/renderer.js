@@ -149,6 +149,25 @@ const I18N = {
     ytRestrictedOpening: '연령 제한 곡 — 유튜브로 전환 중…',
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
+    oaTitle: '구글 계정 연결',
+    oaConnected: '연결됨',
+    oaDisconnected: '연결 안 됨',
+    oaConnect: '구글 계정으로 연결',
+    oaDisconnect: '연결 해제',
+    oaHow: '기본 브라우저(크롬)가 열리고, 이미 로그인된 계정을 고르면 끝입니다. 비밀번호는 앱을 거치지 않습니다.',
+    oaSetupTitle: '최초 1회 설정',
+    oaSetupHelp: 'Google Cloud에서 발급한 데스크톱 앱 OAuth 클라이언트 ID를 넣어 주세요. 발급 방법은 아래 안내를 참고하세요.',
+    oaClientId: '클라이언트 ID',
+    oaClientSecret: '클라이언트 보안 비밀 (선택)',
+    oaSave: '저장',
+    oaGuide: '발급 방법 보기',
+    oaGuideSteps: '1) console.cloud.google.com 접속 · 2) 프로젝트 생성 · 3) API 및 서비스 → 라이브러리에서 YouTube Data API v3 사용 설정 · 4) OAuth 동의 화면 구성(외부/테스트, 본인 계정을 테스트 사용자로 추가) · 5) 사용자 인증 정보 → OAuth 클라이언트 ID 만들기 → 애플리케이션 유형 데스크톱 앱 · 6) 생성된 클라이언트 ID를 위에 붙여넣기',
+    oaConnecting: '브라우저에서 계정을 선택해 주세요…',
+    oaFailed: '연결 실패',
+    oaNeedSetup: '먼저 클라이언트 ID를 저장해 주세요.',
+    ytOpenBrowser: '브라우저에서 재생',
+    ytOpenedBrowser: '연령 제한 곡 — 브라우저에서 재생 중입니다',
+    ytRestrictedSkip: '연령 제한 곡을 건너뛰었습니다',
     alarmChipTip: '알람 · 클릭: 시간 카드',
     minShort: '분',
   },
@@ -289,6 +308,25 @@ const I18N = {
     ytRestrictedOpening: 'Age-restricted track — switching to YouTube…',
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
+    oaTitle: 'Google account',
+    oaConnected: 'Connected',
+    oaDisconnected: 'Not connected',
+    oaConnect: 'Connect Google account',
+    oaDisconnect: 'Disconnect',
+    oaHow: 'Your default browser opens and you pick an account you are already signed into. The password never goes through this app.',
+    oaSetupTitle: 'One-time setup',
+    oaSetupHelp: 'Paste the desktop-app OAuth client ID you created in Google Cloud. See the steps below.',
+    oaClientId: 'Client ID',
+    oaClientSecret: 'Client secret (optional)',
+    oaSave: 'Save',
+    oaGuide: 'How to get one',
+    oaGuideSteps: '1) Open console.cloud.google.com  2) Create a project  3) APIs and services > Library > enable YouTube Data API v3  4) Configure the OAuth consent screen (External/Testing, add your own account as a test user)  5) Credentials > Create OAuth client ID > application type Desktop app  6) Paste the client ID above',
+    oaConnecting: 'Pick your account in the browser…',
+    oaFailed: 'Connection failed',
+    oaNeedSetup: 'Save a client ID first.',
+    ytOpenBrowser: 'Play in browser',
+    ytOpenedBrowser: 'Age-restricted track — playing in your browser',
+    ytRestrictedSkip: 'Skipped an age-restricted track',
     alarmChipTip: 'Alarm · click: time card',
     minShort: 'min',
   },
@@ -390,6 +428,8 @@ const defaultState = {
     // Remembering them means the deck can go straight to the YouTube view
     // next time instead of failing into it.
     restrictedIds: [],
+    // Videos that need a signed-in browser session (age gate).
+    gatedIds: [],
     alarmTime: '',
   },
 };
@@ -1152,8 +1192,16 @@ function escapeHtml(str) {
   }[ch]));
 }
 
+// Values that land inside a CSS url(...) need parens and quotes gone, since
+// either can terminate the function early.
 function escapeAttr(str) {
   return String(str || '').replace(/[\\'"()]/g, '');
+}
+
+// Plain quoted HTML attributes only need the markup characters escaped, so
+// user-visible text keeps its punctuation (titles, hints, placeholders).
+function escapeAttrText(str) {
+  return escapeHtml(str);
 }
 
 function playbackHasLoadedItem() {
@@ -1734,7 +1782,7 @@ function customThemeFlow() {
     <div class="settings-form theme-form">
       <section class="settings-field">
         <div class="field-copy"><strong>${t('ctName')}</strong></div>
-        <input id="ctName" class="text-input" maxlength="24" placeholder="My Theme" value="${escapeAttr(draft.name)}" />
+        <input id="ctName" class="text-input" maxlength="24" placeholder="My Theme" value="${escapeAttrText(draft.name)}" />
         <div class="ct-color-grid">
           ${colorField('bg0', t('ctBg0'))}
           ${colorField('bg1', t('ctBg1'))}
@@ -2142,6 +2190,7 @@ function progressKnobFlow() {
 }
 
 function playOrPause() {
+  leaveBrowserMode();
   if (ytMode) { window.deckAPI?.ytCommand?.('toggle'); return; }
   if (!ready) return;
   const stateCode = player.getPlayerState?.();
@@ -2212,6 +2261,7 @@ function shuffle(arr) {
 }
 
 async function playNext(forceStart = false, opts = {}) {
+  leaveBrowserMode();
   if (ytMode) stopYouTubeMode();
   if (!ready) {
     setStatus('WAIT');
@@ -2244,6 +2294,7 @@ async function playNext(forceStart = false, opts = {}) {
 
 
 function playPrevious() {
+  leaveBrowserMode();
   if (ytMode) stopYouTubeMode();
   if (!ready) return;
   const prev = historyStack.pop();
@@ -2319,6 +2370,12 @@ function playItem(item) {
   applyThemeForCurrentItem(true);
   setStatus('LOAD');
 
+  if (item.type === 'track' && isGated(item)) {
+    playInBrowser(item);
+    autoSkipCount = 0;
+    return;
+  }
+
   if (item.type === 'track' && isRestricted(item)) {
     startYouTubeMode(item);
     autoSkipCount = 0;
@@ -2361,10 +2418,10 @@ function addPlaylistFlow() {
   showModal(t('addPlaylistTitle'), `
     <div class="form-grid add-link-grid add-link-form">
       <label>${t('nameLabel')}
-        <input id="addName" class="text-input" placeholder="${escapeAttr(t('namePlaceholder'))}" />
+        <input id="addName" class="text-input" placeholder="${escapeAttrText(t('namePlaceholder'))}" />
       </label>
       <label class="url-field">${t('urlLabel')}
-        <textarea id="addUrl" placeholder="${escapeAttr(t('urlPlaceholder'))}"></textarea>
+        <textarea id="addUrl" placeholder="${escapeAttrText(t('urlPlaceholder'))}"></textarea>
       </label>
       <p class="help-text">${t('addHelp')}</p>
       <div class="form-actions">
@@ -3095,8 +3152,8 @@ function trackBrowserFlow() {
     '  <div class="tb-head">',
     '    <div class="tb-search-box">',
     '      <svg class="tb-search-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>',
-    '      <input id="tbSearch" class="text-input tb-search" type="text" autocomplete="off" spellcheck="false" placeholder="' + escapeAttr(t('tbPlaceholder')) + '" />',
-    '      <button id="tbClear" class="tb-clear hidden" type="button" title="' + escapeAttr(t('reset')) + '">×</button>',
+    '      <input id="tbSearch" class="text-input tb-search" type="text" autocomplete="off" spellcheck="false" placeholder="' + escapeAttrText(t('tbPlaceholder')) + '" />',
+    '      <button id="tbClear" class="tb-clear hidden" type="button" title="' + escapeAttrText(t('reset')) + '">×</button>',
     '    </div>',
     '    <div class="tb-scopes">',
     '      <button class="mini-action tb-scope" data-scope="board" type="button">' + t('tbScopeBoard') + '</button>',
@@ -3147,6 +3204,9 @@ function trackBrowserFlow() {
   // re-anchoring the scroll position - that feedback loop is what made the
   // list bolt to the bottom after a few wheel ticks.
   const paint = (force) => {
+    // A queued frame or a resize notification can arrive after the modal is
+    // gone, at which point there is nothing left to paint.
+    if (!trackBrowser) return;
     const total = trackBrowser.filtered.length;
     const cols = computeCols();
     if (cols !== trackBrowser.cols) { trackBrowser.cols = cols; force = true; }
@@ -3175,9 +3235,12 @@ function trackBrowserFlow() {
   // Coalesce scroll bursts into one repaint per frame.
   let paintFrame = 0;
   const paintSoon = () => {
-    if (paintFrame) return;
+    if (paintFrame || !trackBrowser) return;
     paintFrame = window.requestAnimationFrame(() => { paintFrame = 0; paint(false); });
   };
+  if (trackBrowser) {
+    trackBrowser.cancelFrame = () => { if (paintFrame) { cancelAnimationFrame(paintFrame); paintFrame = 0; } };
+  }
 
   const applyFilter = (keepScroll) => {
     trackBrowser.filtered = filterBrowserItems(trackBrowser.items, trackBrowser.query);
@@ -3260,9 +3323,10 @@ function trackBrowserFlow() {
   if (listEl) listEl.addEventListener('keydown', onKeydown);
 
   if (window.ResizeObserver && listEl) {
-    const ro = new ResizeObserver(() => paint(true));
+    const ro = new ResizeObserver(() => { if (trackBrowser) paint(true); });
     ro.observe(listEl);
-    trackBrowser.dispose = () => ro.disconnect();
+    const cancel = trackBrowser.cancelFrame;
+    trackBrowser.dispose = () => { ro.disconnect(); if (cancel) cancel(); };
   }
 
   setScope(initialScope);
@@ -3292,7 +3356,45 @@ function playTrackFromBrowser(item) {
  * the account the user signed into. Everything else (queue, controls, themes)
  * stays as it was, and the deck takes over again when the track ends.
  * ========================================================================= */
-let ytAuth = { signedIn: false };
+// Videos that showed YouTube's age gate. Those need a real signed-in browser
+// session, which only the user's own browser has, so they go straight there
+// next time instead of failing in the deck view first.
+function gatedSet() {
+  if (!Array.isArray(state.settings.gatedIds)) state.settings.gatedIds = [];
+  return new Set(state.settings.gatedIds);
+}
+
+function markGated(videoId) {
+  if (!videoId) return;
+  const list = Array.isArray(state.settings.gatedIds) ? state.settings.gatedIds : [];
+  if (list.includes(videoId)) return;
+  list.push(videoId);
+  state.settings.gatedIds = list.slice(-400);
+  saveState();
+}
+
+function isGated(item) {
+  return Boolean(item && item.videoId && gatedSet().has(item.videoId));
+}
+
+// Age-restricted playback happens in the user's own browser, where they are
+// already signed in and verified. The deck holds still rather than talking
+// over it, and picks up again on the next command.
+function playInBrowser(item) {
+  if (!item || !item.videoId) return;
+  markGated(item.videoId);
+  stopYouTubeMode();
+  try { player?.stopVideo?.(); } catch {}
+  document.body.classList.add('browser-mode');
+  updatePlayButtonLabel(false);
+  setStatus('BROWSER');
+  setSubtitle(t('ytOpenedBrowser'), { sticky: true });
+  window.deckAPI?.openExternalVideo?.(item.videoId);
+}
+
+function leaveBrowserMode() {
+  document.body.classList.remove('browser-mode');
+}
 let ytMode = null;
 let ytBoundsTimer = null;
 
@@ -3314,63 +3416,134 @@ function isRestricted(item) {
   return Boolean(item && item.videoId && restrictedSet().has(item.videoId));
 }
 
-function updateAccountButton() {
-  if (!els.accountBtn) return;
-  els.accountBtn.classList.toggle('active', !!ytAuth.signedIn);
-  els.accountBtn.title = t('ytAccount') + ' - ' + (ytAuth.signedIn ? t('ytSignedIn') : t('ytSignedOut'));
-  els.accountBtn.innerHTML = '<span class="account-glyph" aria-hidden="true">G</span><span class="account-dot' + (ytAuth.signedIn ? ' on' : '') + '"></span>';
-}
+/* ---------------------------------------------------------- Google OAuth UI */
+let oauthState = { configured: false, connected: false, email: '' };
 
-async function refreshYtAuth() {
+async function refreshOauth() {
   try {
-    ytAuth = (await window.deckAPI?.ytStatus?.()) || { signedIn: false };
+    oauthState = (await window.deckAPI?.oauthStatus?.()) || { configured: false, connected: false };
   } catch {
-    ytAuth = { signedIn: false };
+    oauthState = { configured: false, connected: false };
   }
   updateAccountButton();
-  return ytAuth;
+  return oauthState;
 }
 
 function accountFlow() {
-  const signedIn = !!ytAuth.signedIn;
-  showModal(t('ytAccount'), [
+  const connected = !!oauthState.connected;
+  const configured = !!oauthState.configured;
+  showModal(t('oaTitle'), [
     '<div class="settings-form account-form">',
     '  <section class="settings-field account-state">',
-    '    <div class="account-avatar' + (signedIn ? ' on' : '') + '" aria-hidden="true">G</div>',
+    '    <div class="account-avatar' + (connected ? ' on' : '') + '" aria-hidden="true">G</div>',
     '    <div class="field-copy">',
-    '      <strong>' + escapeHtml(signedIn ? t('ytSignedIn') : t('ytSignedOut')) + '</strong>',
-    '      <span>' + escapeHtml(t('ytWhySignIn')) + '</span>',
+    '      <strong>' + escapeHtml(connected ? t('oaConnected') : t('oaDisconnected')) + (connected && oauthState.email ? ' · ' + escapeHtml(oauthState.email) : '') + '</strong>',
+    '      <span>' + escapeHtml(t('oaHow')) + '</span>',
     '    </div>',
     '  </section>',
     '  <section class="settings-field">',
-    '    <div class="field-copy"><strong>' + escapeHtml(t('ytAccount')) + '</strong><span>' + escapeHtml(t('ytSignInHelp')) + '</span></div>',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('oaSetupTitle')) + '</strong><span>' + escapeHtml(t('oaSetupHelp')) + '</span></div>',
+    '    <input id="oaClientId" class="text-input" placeholder="' + escapeAttrText(t('oaClientId')) + '" autocomplete="off" spellcheck="false" />',
+    '    <input id="oaClientSecret" class="text-input" placeholder="' + escapeAttrText(t('oaClientSecret')) + '" autocomplete="off" spellcheck="false" />',
     '    <div class="account-actions">',
-    signedIn
-      ? '      <button id="ytSignOutBtn" class="mini-action" type="button">' + escapeHtml(t('ytSignOut')) + '</button>'
-      : '      <button id="ytSignInBtn" class="file-pick-btn" type="button">' + escapeHtml(t('ytSignIn')) + '</button>',
+    '      <button id="oaSave" class="mini-action" type="button">' + escapeHtml(t('oaSave')) + '</button>',
+    '      <button id="oaGuide" class="mini-action" type="button">' + escapeHtml(t('oaGuide')) + '</button>',
     '    </div>',
+    '    <span id="oaGuideText" class="tc-status hidden">' + escapeHtml(t('oaGuideSteps')) + '</span>',
     '  </section>',
     '  <section class="settings-field">',
     '    <div class="field-copy"><strong>' + escapeHtml(t('ytMyPlaylists')) + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
-    '    <button id="ytPlaylistsBtn" class="mini-action accent" type="button"' + (signedIn ? '' : ' disabled') + '>' + escapeHtml(t('ytMyPlaylists')) + '</button>',
+    '    <div class="account-actions">',
+    connected
+      ? '      <button id="oaPlaylists" class="file-pick-btn" type="button">' + escapeHtml(t('ytMyPlaylists')) + '</button>'
+      : '      <button id="oaConnect" class="file-pick-btn" type="button"' + (configured ? '' : ' disabled') + '>' + escapeHtml(t('oaConnect')) + '</button>',
+    connected ? '      <button id="oaDisconnect" class="mini-action" type="button">' + escapeHtml(t('oaDisconnect')) + '</button>' : '',
+    '    </div>',
+    '    <span id="oaMsg" class="tc-status"></span>',
     '  </section>',
     '  <div class="form-actions settings-actions">',
-    '    <button id="ytAccountClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
+    '    <button id="oaClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
     '  </div>',
     '</div>',
   ].join('\n'));
 
-  $('#ytSignInBtn')?.addEventListener('click', async () => {
-    setSubtitle(t('ytOpening'));
-    await window.deckAPI?.ytSignIn?.();
+  const msg = (text) => { const el = document.querySelector('#oaMsg'); if (el) el.textContent = text || ''; };
+
+  document.querySelector('#oaGuide')?.addEventListener('click', () => {
+    document.querySelector('#oaGuideText')?.classList.toggle('hidden');
   });
-  $('#ytSignOutBtn')?.addEventListener('click', async () => {
-    ytAuth = (await window.deckAPI?.ytSignOut?.()) || { signedIn: false };
+  document.querySelector('#oaSave')?.addEventListener('click', async () => {
+    const id = document.querySelector('#oaClientId')?.value.trim();
+    const secret = document.querySelector('#oaClientSecret')?.value.trim();
+    if (!id) { msg(t('oaNeedSetup')); return; }
+    oauthState = await window.deckAPI?.oauthConfigure?.(id, secret);
     updateAccountButton();
-    hideModal();
+    accountFlow();
   });
-  $('#ytPlaylistsBtn')?.addEventListener('click', () => myPlaylistsFlow());
-  $('#ytAccountClose')?.addEventListener('click', hideModal);
+  document.querySelector('#oaConnect')?.addEventListener('click', async () => {
+    msg(t('oaConnecting'));
+    const res = await window.deckAPI?.oauthConnect?.();
+    if (res && res.ok) {
+      oauthState = res.status;
+      updateAccountButton();
+      accountFlow();
+      setSubtitle(t('oaConnected') + (oauthState.email ? ' · ' + oauthState.email : ''));
+    } else {
+      msg(t('oaFailed') + ': ' + ((res && res.message) || ''));
+    }
+  });
+  document.querySelector('#oaDisconnect')?.addEventListener('click', async () => {
+    oauthState = await window.deckAPI?.oauthDisconnect?.();
+    updateAccountButton();
+    accountFlow();
+  });
+  document.querySelector('#oaPlaylists')?.addEventListener('click', () => myPlaylistsFlow());
+  document.querySelector('#oaClose')?.addEventListener('click', hideModal);
+}
+
+function updateAccountButton() {
+  if (!els.accountBtn) return;
+  const on = !!oauthState.connected;
+  els.accountBtn.classList.toggle('active', on);
+  els.accountBtn.title = t('oaTitle') + ' - ' + (on ? t('oaConnected') : t('oaDisconnected'));
+  els.accountBtn.innerHTML = '<span class="account-glyph" aria-hidden="true">G</span><span class="account-dot' + (on ? ' on' : '') + '"></span>';
+}
+
+// Refreshes one chip from the official API. Mirrors the no-key importer's
+// merge rules exactly: the account's list replaces the source bucket, while
+// videos the user added by hand stay in the manual bucket and survive.
+async function importPlaylistViaApi(id, opts = {}) {
+  const playlist = getPlaylist(id);
+  if (!playlist || !playlist.playlistId) return false;
+  try {
+    normalizePlaylistTrackBuckets(playlist);
+    const preservedManualTracks = inferManualTracksFromLegacy(playlist);
+    setStatus('IMPORT');
+    setSubtitle(`${playlist.name} ${t('ytImportBusy')}`);
+    const result = await window.deckAPI?.apiPlaylistItems?.(playlist.playlistId);
+    const importedTracks = result?.tracks || [];
+    if (!importedTracks.length) throw new Error('0 tracks returned');
+    playlist.sourceTracks = dedupeTracks(importedTracks.map((track) => ({ ...track, source: 'youtube' })));
+    playlist.manualTracks = dedupeTracks(preservedManualTracks.map((track) => ({ ...track, source: 'manual' })));
+    playlist.tracks = mergeSourceAndManualTracks(playlist.sourceTracks, playlist.manualTracks);
+    playlist.thumb = playlist.thumb || playlist.tracks.find((track) => track.thumbnail)?.thumbnail || '';
+    playlist.importMethod = 'oauth-api';
+    playlist.importPartial = !result.complete;
+    playlist.importComplete = Boolean(result.complete);
+    playlist.importError = '';
+    playlist.updatedAt = new Date().toISOString();
+    badItemKeys.clear();
+    bumpDataVersion();
+    if (state.onBoard.includes(playlist.id) || activeOnBoard.includes(playlist.id)) markOnBoardChanged();
+    return true;
+  } catch (err) {
+    // A failed refresh must never destroy what the chip already holds.
+    normalizePlaylistTrackBuckets(playlist);
+    playlist.importError = err.message || String(err);
+    playlist.updatedAt = new Date().toISOString();
+    if (!opts.silentFail) setSubtitle(`${playlist.name}: ${err.message || err}`);
+    return false;
+  }
 }
 
 // Classifies a remote playlist against what the deck already holds, so nothing
@@ -3395,7 +3568,7 @@ async function myPlaylistsFlow(preloaded = null) {
   simpleModal(t('ytMyPlaylists'), t('ytLoadingPlaylists'));
   let result = preloaded;
   try {
-    if (!result) result = await window.deckAPI?.ytMyPlaylists?.();
+    if (!result) result = await window.deckAPI?.apiPlaylists?.();
   } catch (err) {
     simpleModal(t('ytMyPlaylists'), t('ytNoPlaylists'), err.message || String(err));
     return;
@@ -3478,7 +3651,7 @@ async function myPlaylistsFlow(preloaded = null) {
         refreshed += 1;
       }
       setSubtitle(t('ytImportBusy') + ' ' + (remote.title || playlistId));
-      await importPlaylistTracksNoKey(chip.id, { silentFail: true });
+      await importPlaylistViaApi(chip.id, { silentFail: true });
       if (!(getPlaylist(chip.id)?.tracks || []).length) failed += 1;
     }
     render();
@@ -3543,12 +3716,9 @@ function stopYouTubeMode() {
 function handleYtEvent(payload) {
   if (!ytMode || !payload) return;
   if (payload.type === 'blocked') {
-    // YouTube itself is refusing to play: almost always the age gate, which
-    // only a signed-in, age-verified account can pass.
-    ytMode.blocked = true;
-    setStatus('LOCKED');
-    setSubtitle(ytAuth.signedIn ? (payload.reason || t('ytNeedSignIn')) : t('ytNeedSignIn'), { sticky: true });
-    if (!ytMode.blockedAt) ytMode.blockedAt = Date.now();
+    // YouTube is refusing to play: the age gate, which no embedded session can
+    // pass. The user's own browser can, so the track continues there.
+    playInBrowser(ytMode.item);
     return;
   }
   if (payload.type === 'progress') {
@@ -3557,8 +3727,9 @@ function handleYtEvent(payload) {
     updatePlayButtonLabel(!payload.paused);
     if (payload.ad) {
       // An ad is its own video element; showing its clock on the deck's bar
-      // would look like the song jumped. Leave the bar alone and say so.
-      setStatus('AD');
+      // would look like the song jumped. Leave the bar alone and say so -
+      // but a paused deck still has to read as paused.
+      setStatus(payload.paused ? 'PAUSE' : 'AD');
       return;
     }
     const duration = Number(payload.duration) || 0;
@@ -3588,11 +3759,7 @@ function wireEvents() {
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
   els.searchBtn?.addEventListener('click', trackBrowserFlow);
   els.accountBtn?.addEventListener('click', accountFlow);
-  window.deckAPI?.onYtAuthChanged?.((info) => {
-    ytAuth = info || { signedIn: false };
-    updateAccountButton();
-    if (ytAuth.signedIn && ytMode) setSubtitle(t('ytRestrictedBadge'), { sticky: true });
-  });
+
   window.deckAPI?.onYtEvent?.(handleYtEvent);
   window.addEventListener('keydown', (e) => {
     // Ctrl/Cmd+F (and plain F3) open the track browser from anywhere.
@@ -3832,7 +3999,7 @@ async function boot() {
   await hydratePersistentState();
   wireEvents();
   startClock();
-  refreshYtAuth();
+  refreshOauth();
   seedDemoIfEmpty();
   setTrackTitleText(els.trackTitle.textContent);
   commitOnBoardChanges('boot');
