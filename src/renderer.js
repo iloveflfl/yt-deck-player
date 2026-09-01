@@ -3024,9 +3024,7 @@ function trackBrowserFlow() {
     '    </div>',
     '  </div>',
     '  <div id="tbList" class="tb-list" tabindex="0">',
-    '    <div id="tbSpacerTop"></div>',
-    '    <div id="tbRows"></div>',
-    '    <div id="tbSpacerBottom"></div>',
+    '    <div id="tbCanvas" class="tb-canvas"><div id="tbRows"></div></div>',
     '  </div>',
     '  <div class="tb-foot"><span id="tbCount" class="tb-count"></span><span class="tb-hint">' + t('tbHint') + '</span></div>',
     '</div>',
@@ -3034,8 +3032,7 @@ function trackBrowserFlow() {
 
   const listEl = $('#tbList');
   const rowsEl = $('#tbRows');
-  const topEl = $('#tbSpacerTop');
-  const bottomEl = $('#tbSpacerBottom');
+  const canvasEl = $('#tbCanvas');
   const searchEl = $('#tbSearch');
   const countEl = $('#tbCount');
   const clearEl = $('#tbClear');
@@ -3064,12 +3061,22 @@ function trackBrowserFlow() {
       + '<span class="tb-dur">' + dur + '</span></button>';
   };
 
+  // The scrollable height lives on a canvas sized from the item count alone,
+  // and the visible window is positioned absolutely inside it. Swapping rows
+  // therefore never changes scrollHeight, so the browser cannot 'help' by
+  // re-anchoring the scroll position - that feedback loop is what made the
+  // list bolt to the bottom after a few wheel ticks.
   const paint = (force) => {
     const total = trackBrowser.filtered.length;
     const cols = computeCols();
     if (cols !== trackBrowser.cols) { trackBrowser.cols = cols; force = true; }
     rowsEl.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
     const gridRows = Math.ceil(total / cols);
+    const canvasHeight = gridRows * TB_ROW_HEIGHT;
+    if (canvasEl.dataset.height !== String(canvasHeight)) {
+      canvasEl.dataset.height = String(canvasHeight);
+      canvasEl.style.height = canvasHeight + 'px';
+    }
     const viewport = listEl.clientHeight || 240;
     const firstRow = Math.max(0, Math.floor(listEl.scrollTop / TB_ROW_HEIGHT) - TB_OVERSCAN);
     const lastRow = Math.min(gridRows, firstRow + Math.ceil(viewport / TB_ROW_HEIGHT) + TB_OVERSCAN * 2);
@@ -3078,12 +3085,18 @@ function trackBrowserFlow() {
     const rangeKey = [first, last, total, cols, trackBrowser.sel, currentKey()].join(':');
     if (!force && rangeKey === trackBrowser.renderedRange) return;
     trackBrowser.renderedRange = rangeKey;
-    topEl.style.height = (firstRow * TB_ROW_HEIGHT) + 'px';
-    bottomEl.style.height = Math.max(0, (gridRows - lastRow) * TB_ROW_HEIGHT) + 'px';
+    rowsEl.style.transform = 'translateY(' + (firstRow * TB_ROW_HEIGHT) + 'px)';
     rowsEl.innerHTML = total === 0
       ? '<div class="tb-empty">' + escapeHtml(trackBrowser.items.length ? t('tbNoMatch') : t('tbEmptyScope')) + '</div>'
       : trackBrowser.filtered.slice(first, last).map((item, i) => rowHtml(item, first + i)).join('');
     countEl.textContent = total.toLocaleString() + ' ' + t('tbTracks');
+  };
+
+  // Coalesce scroll bursts into one repaint per frame.
+  let paintFrame = 0;
+  const paintSoon = () => {
+    if (paintFrame) return;
+    paintFrame = window.requestAnimationFrame(() => { paintFrame = 0; paint(false); });
   };
 
   const applyFilter = (keepScroll) => {
@@ -3143,7 +3156,7 @@ function trackBrowserFlow() {
   document.querySelectorAll('.tb-scope').forEach((btn) => {
     btn.addEventListener('click', () => setScope(btn.dataset.scope));
   });
-  if (listEl) listEl.addEventListener('scroll', () => paint(false));
+  if (listEl) listEl.addEventListener('scroll', paintSoon, { passive: true });
   if (rowsEl) {
     rowsEl.addEventListener('click', (e) => {
       const row = e.target.closest ? e.target.closest('.tb-row') : null;
