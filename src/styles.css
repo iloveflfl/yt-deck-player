@@ -1799,3 +1799,92 @@ body.is-dock-side .modal-head strong { min-width: 0; overflow: hidden; text-over
   will-change: transform;
   overflow-anchor: none;
 }
+
+/* =========================================================================
+ * Google account + in-deck YouTube playback (v3.1)
+ * ========================================================================= */
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  position: relative;
+}
+.account-glyph {
+  font-weight: 1000;
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.account-chip.active .account-glyph { color: var(--accent); }
+.account-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.account-dot.on { background: var(--good); box-shadow: 0 0 6px var(--good); }
+.account-form { grid-template-columns: minmax(180px, .7fr) minmax(240px, 1fr) minmax(220px, 1fr) auto; }
+.account-state { grid-template-columns: auto 1fr; align-items: center; gap: 10px; display: grid; }
+.account-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-weight: 1000; font-size: 15px;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background: color-mix(in srgb, var(--panel2) 70%, transparent);
+}
+.account-avatar.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+.account-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* playlist picker */
+.yp-form { grid-template-columns: 1fr; }
+.yp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.yp-bulk { display: flex; gap: 5px; }
+.yp-list-field { padding: 6px; }
+.yp-list { display: grid; gap: 4px; max-height: min(46vh, 380px); overflow-y: auto; }
+.yp-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 8px; border-radius: 10px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--panel2) 55%, transparent);
+}
+.yp-row:hover { border-color: color-mix(in srgb, var(--accent) 38%, transparent); }
+.yp-check { width: 15px; height: 15px; accent-color: var(--accent); flex: 0 0 auto; }
+.yp-thumb {
+  flex: 0 0 46px; height: 27px; border-radius: 6px;
+  background-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background-size: cover; background-position: center;
+}
+.yp-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.yp-title { font-size: 12px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yp-meta { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yp-state {
+  flex: 0 0 auto; font-size: 9px; font-weight: 900; letter-spacing: .04em;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+}
+.yp-new { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+.yp-linked { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.yp-overlap { color: var(--accent2); background: color-mix(in srgb, var(--accent2) 16%, transparent); }
+body.is-low .yp-list, body.is-mini .yp-list { max-height: calc(100vh - 150px); }
+
+/* while YouTube owns playback the preview panel is its frame */
+body.yt-mode .preview-panel { display: block !important; position: relative; }
+body.yt-mode .preview-fallback { display: none !important; }
+body.yt-mode .youtube-frame { visibility: hidden; }
+body.yt-mode .preview-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 55%, transparent);
+  animation: yt-frame 2.6s ease-in-out infinite;
+  z-index: 4;
+}
+@keyframes yt-frame {
+  0%, 100% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 40%, transparent); }
+  50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 80%, transparent); }
+}
+body.yt-mode .progress-wrap { opacity: .75; cursor: default; }
+body.yt-mode #statusText { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2) 40%, transparent); }

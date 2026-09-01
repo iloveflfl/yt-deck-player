@@ -125,6 +125,30 @@ const I18N = {
     tbTracks: '곡',
     tbOpen: '트랙 찾기 (Ctrl+F)',
     tbOffBoard: '라이브러리에서 재생 — 다음 곡은 온보드 풀에서 이어집니다',
+    ytAccount: '구글 계정',
+    ytSignIn: '구글 계정으로 로그인',
+    ytSignOut: '로그아웃',
+    ytSignedIn: '로그인됨',
+    ytSignedOut: '로그인하지 않음',
+    ytSignInHelp: '유튜브 공식 로그인 창이 열립니다. 비밀번호는 앱이 보거나 저장하지 않으며, 로그인 상태는 다음 실행에도 유지됩니다.',
+    ytWhySignIn: '연령 제한 곡 재생과 내 재생목록 가져오기에 사용됩니다.',
+    ytOpening: '로그인 창을 여는 중…',
+    ytMyPlaylists: '내 재생목록 가져오기',
+    ytLoadingPlaylists: '내 재생목록을 불러오는 중…',
+    ytNoPlaylists: '가져올 재생목록이 없습니다.',
+    ytPickHelp: '이미 있는 목록은 새로 만들지 않고 곡만 갱신합니다. 직접 추가한 곡은 그대로 보존됩니다.',
+    ytStateNew: '새로 추가',
+    ytStateLinked: '이미 있음 · 갱신',
+    ytStateOverlap: '이름 겹침 · 별도 추가',
+    ytImportSelected: '선택 항목 가져오기',
+    ytSelectAll: '전체 선택',
+    ytSelectNone: '선택 해제',
+    ytImportDone: '재생목록 가져오기 완료',
+    ytImportBusy: '가져오는 중…',
+    ytRestrictedBadge: '연령 제한 · 유튜브에서 재생 중',
+    ytRestrictedOpening: '연령 제한 곡 — 유튜브로 전환 중…',
+    ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
+    ytTracks: '곡',
     alarmChipTip: '알람 · 클릭: 시간 카드',
     minShort: '분',
   },
@@ -241,6 +265,30 @@ const I18N = {
     tbTracks: 'tracks',
     tbOpen: 'Find tracks (Ctrl+F)',
     tbOffBoard: 'Played from the library — the next song continues from the on-board pool',
+    ytAccount: 'Google account',
+    ytSignIn: 'Sign in with Google',
+    ytSignOut: 'Sign out',
+    ytSignedIn: 'Signed in',
+    ytSignedOut: 'Not signed in',
+    ytSignInHelp: 'The official YouTube sign-in window opens. The app never sees or stores your password, and the session is kept for next time.',
+    ytWhySignIn: 'Used to play age-restricted tracks and to import your own playlists.',
+    ytOpening: 'Opening the sign-in window…',
+    ytMyPlaylists: 'Import my playlists',
+    ytLoadingPlaylists: 'Loading your playlists…',
+    ytNoPlaylists: 'No playlists to import.',
+    ytPickHelp: 'Playlists you already have are refreshed in place, never duplicated. Videos you added yourself are kept.',
+    ytStateNew: 'New',
+    ytStateLinked: 'Already here · refresh',
+    ytStateOverlap: 'Same name · add separately',
+    ytImportSelected: 'Import selected',
+    ytSelectAll: 'Select all',
+    ytSelectNone: 'Clear selection',
+    ytImportDone: 'Playlist import finished',
+    ytImportBusy: 'Importing…',
+    ytRestrictedBadge: 'Age-restricted · playing on YouTube',
+    ytRestrictedOpening: 'Age-restricted track — switching to YouTube…',
+    ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
+    ytTracks: 'tracks',
     alarmChipTip: 'Alarm · click: time card',
     minShort: 'min',
   },
@@ -338,6 +386,10 @@ const defaultState = {
     progressKnobImage: '',
     progressKnobSize: 1,
     customThemes: [],
+    // Video ids YouTube refuses to embed (age-restricted or embedding off).
+    // Remembering them means the deck can go straight to the YouTube view
+    // next time instead of failing into it.
+    restrictedIds: [],
     alarmTime: '',
   },
 };
@@ -352,6 +404,8 @@ const els = {
   deckClock: $('#deckClock'),
   bigClock: $('#bigClock'),
   searchBtn: $('#searchBtn'),
+  accountBtn: $('#accountBtn'),
+  previewPanel: $('#previewPanel'),
   timerChip: $('#timerChip'),
   alarmChip: $('#alarmChip'),
   previewFallback: $('#previewFallback'),
@@ -452,6 +506,16 @@ function onPlayerStateChange(event) {
 
 function onPlayerError(event) {
   const code = event?.data;
+  // 101/150 is YouTube refusing to embed (age-restricted or embedding off).
+  // Those are playable on youtube.com itself, so hand them to the deck view
+  // rather than dropping the track.
+  if ((code === 101 || code === 150) && currentItem?.videoId) {
+    markRestricted(currentItem.videoId);
+    setStatus('YT');
+    setSubtitle(t('ytRestrictedOpening'));
+    startYouTubeMode(currentItem);
+    return;
+  }
   setStatus(`SKIP ${code}`);
   if (currentItem) {
     badItemKeys.add(itemKey(currentItem));
@@ -1845,6 +1909,7 @@ function visualProgressAt(now = performance.now()) {
 }
 
 function sampleProgressNow(options = {}) {
+  if (ytMode) return null;
   if (isScrubbingProgress) return;
   if (!ready || !player || typeof player.getCurrentTime !== 'function') return;
   const now = performance.now();
@@ -1938,6 +2003,7 @@ function animateProgressRewindThen(callback) {
 }
 
 function applyPlaybackRate() {
+  if (ytMode) { window.deckAPI?.ytCommand?.('rate', clampSpeed(state.playback.playbackRate || 1)); return; }
   if (!ready || !player?.setPlaybackRate) return;
   const rate = clampSpeed(state.playback.playbackRate || 1);
   try {
@@ -2076,6 +2142,7 @@ function progressKnobFlow() {
 }
 
 function playOrPause() {
+  if (ytMode) { window.deckAPI?.ytCommand?.('toggle'); return; }
   if (!ready) return;
   const stateCode = player.getPlayerState?.();
   if (stateCode === YT.PlayerState.PLAYING) {
@@ -2145,6 +2212,7 @@ function shuffle(arr) {
 }
 
 async function playNext(forceStart = false, opts = {}) {
+  if (ytMode) stopYouTubeMode();
   if (!ready) {
     setStatus('WAIT');
     return;
@@ -2176,6 +2244,7 @@ async function playNext(forceStart = false, opts = {}) {
 
 
 function playPrevious() {
+  if (ytMode) stopYouTubeMode();
   if (!ready) return;
   const prev = historyStack.pop();
   if (prev) playItem(prev, { fromHistory: true });
@@ -2236,6 +2305,9 @@ function handlePlaybackErrorSkip() {
 
 function playItem(item) {
   if (progressRewindRaf) cancelAnimationFrame(progressRewindRaf);
+  // A track already known to be un-embeddable skips the doomed iframe attempt
+  // entirely, so the switch to YouTube is immediate instead of error-driven.
+  if (ytMode && (!item || itemKey(item) !== itemKey(ytMode.item))) stopYouTubeMode();
   isRewindingProgress = false;
   currentItem = item;
   els.previewFallback.classList.add('hidden');
@@ -2246,6 +2318,12 @@ function playItem(item) {
   paintProgress(0, item.duration || 0);
   applyThemeForCurrentItem(true);
   setStatus('LOAD');
+
+  if (item.type === 'track' && isRestricted(item)) {
+    startYouTubeMode(item);
+    autoSkipCount = 0;
+    return;
+  }
 
   if (item.type === 'track') {
     player.loadVideoById({ videoId: item.videoId, startSeconds: 0, suggestedQuality: 'small' });
@@ -2461,6 +2539,7 @@ function progressTimeFromClientX(clientX) {
 }
 
 function seekFromProgress(event) {
+  if (ytMode) return;
   if (performance.now() < suppressProgressClickUntil) return;
   if (!ready || !player) return;
   const info = progressTimeFromClientX(event.clientX);
@@ -2490,6 +2569,7 @@ function updateScrubPreview(event, options = {}) {
 }
 
 function beginProgressScrub(event) {
+  if (ytMode) return;
   if (!ready || !player || event.button !== 0) return;
   const info = progressTimeFromClientX(event.clientX);
   if (!info) return;
@@ -3203,12 +3283,317 @@ function playTrackFromBrowser(item) {
   playItem(item);
 }
 
+/* =========================================================================
+ * Google account + in-deck YouTube playback
+ * -------------------------------------------------------------------------
+ * Age-restricted tracks cannot play in a third-party iframe at all - YouTube
+ * blocks that regardless of who is signed in. The deck therefore plays those
+ * tracks on youtube.com itself, in a view pinned over the preview panel, using
+ * the account the user signed into. Everything else (queue, controls, themes)
+ * stays as it was, and the deck takes over again when the track ends.
+ * ========================================================================= */
+let ytAuth = { signedIn: false };
+let ytMode = null;
+let ytBoundsTimer = null;
+
+function restrictedSet() {
+  if (!Array.isArray(state.settings.restrictedIds)) state.settings.restrictedIds = [];
+  return new Set(state.settings.restrictedIds);
+}
+
+function markRestricted(videoId) {
+  if (!videoId) return;
+  const list = Array.isArray(state.settings.restrictedIds) ? state.settings.restrictedIds : [];
+  if (list.includes(videoId)) return;
+  list.push(videoId);
+  state.settings.restrictedIds = list.slice(-400);
+  saveState();
+}
+
+function isRestricted(item) {
+  return Boolean(item && item.videoId && restrictedSet().has(item.videoId));
+}
+
+function updateAccountButton() {
+  if (!els.accountBtn) return;
+  els.accountBtn.classList.toggle('active', !!ytAuth.signedIn);
+  els.accountBtn.title = t('ytAccount') + ' - ' + (ytAuth.signedIn ? t('ytSignedIn') : t('ytSignedOut'));
+  els.accountBtn.innerHTML = '<span class="account-glyph" aria-hidden="true">G</span><span class="account-dot' + (ytAuth.signedIn ? ' on' : '') + '"></span>';
+}
+
+async function refreshYtAuth() {
+  try {
+    ytAuth = (await window.deckAPI?.ytStatus?.()) || { signedIn: false };
+  } catch {
+    ytAuth = { signedIn: false };
+  }
+  updateAccountButton();
+  return ytAuth;
+}
+
+function accountFlow() {
+  const signedIn = !!ytAuth.signedIn;
+  showModal(t('ytAccount'), [
+    '<div class="settings-form account-form">',
+    '  <section class="settings-field account-state">',
+    '    <div class="account-avatar' + (signedIn ? ' on' : '') + '" aria-hidden="true">G</div>',
+    '    <div class="field-copy">',
+    '      <strong>' + escapeHtml(signedIn ? t('ytSignedIn') : t('ytSignedOut')) + '</strong>',
+    '      <span>' + escapeHtml(t('ytWhySignIn')) + '</span>',
+    '    </div>',
+    '  </section>',
+    '  <section class="settings-field">',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('ytAccount')) + '</strong><span>' + escapeHtml(t('ytSignInHelp')) + '</span></div>',
+    '    <div class="account-actions">',
+    signedIn
+      ? '      <button id="ytSignOutBtn" class="mini-action" type="button">' + escapeHtml(t('ytSignOut')) + '</button>'
+      : '      <button id="ytSignInBtn" class="file-pick-btn" type="button">' + escapeHtml(t('ytSignIn')) + '</button>',
+    '    </div>',
+    '  </section>',
+    '  <section class="settings-field">',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('ytMyPlaylists')) + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
+    '    <button id="ytPlaylistsBtn" class="mini-action accent" type="button"' + (signedIn ? '' : ' disabled') + '>' + escapeHtml(t('ytMyPlaylists')) + '</button>',
+    '  </section>',
+    '  <div class="form-actions settings-actions">',
+    '    <button id="ytAccountClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
+    '  </div>',
+    '</div>',
+  ].join('\n'));
+
+  $('#ytSignInBtn')?.addEventListener('click', async () => {
+    setSubtitle(t('ytOpening'));
+    await window.deckAPI?.ytSignIn?.();
+  });
+  $('#ytSignOutBtn')?.addEventListener('click', async () => {
+    ytAuth = (await window.deckAPI?.ytSignOut?.()) || { signedIn: false };
+    updateAccountButton();
+    hideModal();
+  });
+  $('#ytPlaylistsBtn')?.addEventListener('click', () => myPlaylistsFlow());
+  $('#ytAccountClose')?.addEventListener('click', hideModal);
+}
+
+// Classifies a remote playlist against what the deck already holds, so nothing
+// is silently duplicated and nothing unrelated is overwritten.
+function classifyRemotePlaylist(remote) {
+  const byId = state.library.find((p) => p.playlistId === remote.playlistId);
+  if (byId) return { state: 'linked', chip: byId };
+  const name = String(remote.title || '').trim().toLowerCase();
+  const byName = state.library.find((p) => !p.volatile && String(p.name || '').trim().toLowerCase() === name);
+  if (byName) return { state: 'overlap', chip: byName };
+  return { state: 'new', chip: null };
+}
+
+function simpleModal(title, headline, detail) {
+  showModal(title, '<div class="settings-form"><section class="settings-field"><div class="field-copy"><strong>'
+    + escapeHtml(headline) + '</strong>' + (detail ? '<span>' + escapeHtml(detail) + '</span>' : '') + '</div></section></div>');
+}
+
+// `preloaded` lets the picker be driven with an already-fetched result (used
+// by retries and by tests, since the bridged API object is frozen).
+async function myPlaylistsFlow(preloaded = null) {
+  simpleModal(t('ytMyPlaylists'), t('ytLoadingPlaylists'));
+  let result = preloaded;
+  try {
+    if (!result) result = await window.deckAPI?.ytMyPlaylists?.();
+  } catch (err) {
+    simpleModal(t('ytMyPlaylists'), t('ytNoPlaylists'), err.message || String(err));
+    return;
+  }
+  const playlists = (result && result.playlists) || [];
+  if (!playlists.length) {
+    simpleModal(t('ytMyPlaylists'), t('ytNoPlaylists'));
+    return;
+  }
+
+  const rows = playlists.map((remote) => {
+    const info = classifyRemotePlaylist(remote);
+    const label = info.state === 'linked' ? t('ytStateLinked') : info.state === 'overlap' ? t('ytStateOverlap') : t('ytStateNew');
+    const detail = info.chip
+      ? escapeHtml(info.chip.name) + ' - ' + (info.chip.tracks || []).length + ' ' + escapeHtml(t('ytTracks'))
+      : (remote.count || 0) + ' ' + escapeHtml(t('ytTracks'));
+    const thumb = remote.thumbnail ? ' style="background-image:url(\'' + escapeAttr(remote.thumbnail) + '\')"' : '';
+    return '<label class="yp-row" data-state="' + info.state + '">'
+      + '<input type="checkbox" class="yp-check" data-id="' + escapeAttr(remote.playlistId) + '" checked />'
+      + '<span class="yp-thumb"' + thumb + '></span>'
+      + '<span class="yp-main"><span class="yp-title">' + escapeHtml(remote.title || remote.playlistId) + '</span>'
+      + '<span class="yp-meta">' + detail + '</span></span>'
+      + '<span class="yp-state yp-' + info.state + '">' + escapeHtml(label) + '</span>'
+      + '</label>';
+  }).join('');
+
+  showModal(t('ytMyPlaylists'), [
+    '<div class="settings-form yp-form">',
+    '  <section class="settings-field yp-head">',
+    '    <div class="field-copy"><strong>' + playlists.length + ' ' + escapeHtml(t('ytMyPlaylists')) + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
+    '    <div class="yp-bulk"><button id="ypAll" class="mini-action" type="button">' + escapeHtml(t('ytSelectAll')) + '</button><button id="ypNone" class="mini-action" type="button">' + escapeHtml(t('ytSelectNone')) + '</button></div>',
+    '  </section>',
+    '  <section class="settings-field yp-list-field"><div class="yp-list">' + rows + '</div></section>',
+    '  <div class="form-actions settings-actions">',
+    '    <button id="ypImport" class="primary-action" type="button">' + escapeHtml(t('ytImportSelected')) + '</button>',
+    '    <button id="ypClose" class="ghost-action" type="button">' + escapeHtml(t('close')) + '</button>',
+    '  </div>',
+    '</div>',
+  ].join('\n'));
+
+  document.querySelector('#ypAll')?.addEventListener('click', () => document.querySelectorAll('.yp-check').forEach((c) => { c.checked = true; }));
+  document.querySelector('#ypNone')?.addEventListener('click', () => document.querySelectorAll('.yp-check').forEach((c) => { c.checked = false; }));
+  document.querySelector('#ypClose')?.addEventListener('click', hideModal);
+  document.querySelector('#ypImport')?.addEventListener('click', async () => {
+    const chosen = [...document.querySelectorAll('.yp-check')].filter((c) => c.checked).map((c) => c.dataset.id);
+    if (!chosen.length) { hideModal(); return; }
+    const button = document.querySelector('#ypImport');
+    if (button) { button.disabled = true; button.textContent = t('ytImportBusy'); }
+    let added = 0;
+    let refreshed = 0;
+    let failed = 0;
+    for (const playlistId of chosen) {
+      const remote = playlists.find((p) => p.playlistId === playlistId);
+      if (!remote) continue;
+      const info = classifyRemotePlaylist(remote);
+      let chip = info.state === 'linked' ? info.chip : null;
+      if (!chip) {
+        // A name collision must never overwrite an unrelated chip, so the
+        // account copy is added under a distinct name instead.
+        const name = info.state === 'overlap' ? (remote.title || playlistId) + ' (YouTube)' : (remote.title || playlistId);
+        chip = {
+          id: uid('pl'),
+          name,
+          url: 'https://www.youtube.com/playlist?list=' + playlistId,
+          type: 'playlist',
+          playlistId,
+          videoId: null,
+          thumb: remote.thumbnail || '',
+          tracks: [],
+          sourceTracks: [],
+          manualTracks: [],
+          fromAccount: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        state.library.push(chip);
+        bumpDataVersion();
+        added += 1;
+      } else {
+        refreshed += 1;
+      }
+      setSubtitle(t('ytImportBusy') + ' ' + (remote.title || playlistId));
+      await importPlaylistTracksNoKey(chip.id, { silentFail: true });
+      if (!(getPlaylist(chip.id)?.tracks || []).length) failed += 1;
+    }
+    render();
+    hideModal();
+    setStatus('READY');
+    setSubtitle(t('ytImportDone') + ' - +' + added + ' / ' + refreshed + ' refreshed' + (failed ? ' / ' + failed + ' empty' : ''));
+  });
+}
+
+/* ---------------------------------------------------------------- playback */
+
+// Rect of the preview panel in window coordinates, which is where the YouTube
+// view is pinned so the deck's own chrome stays visible around it.
+function previewRect() {
+  const el = els.previewPanel;
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 40 || r.height < 30) return null;
+  return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+}
+
+function pushYtBounds() {
+  if (!ytMode) return;
+  const rect = previewRect();
+  if (rect) window.deckAPI?.ytSetBounds?.(rect);
+}
+
+function scheduleYtBounds() {
+  if (!ytMode) return;
+  clearTimeout(ytBoundsTimer);
+  ytBoundsTimer = window.setTimeout(pushYtBounds, 60);
+}
+
+async function startYouTubeMode(item) {
+  if (!item || !item.videoId) return false;
+  ytMode = { videoId: item.videoId, item, startedAt: Date.now(), ready: false };
+  document.body.classList.add('yt-mode');
+  els.previewFallback.classList.add('hidden');
+  try { player?.stopVideo?.(); } catch {}
+  setStatus('YT');
+  setSubtitle(t('ytRestrictedBadge'), { sticky: true });
+  // Give the layout one frame so the panel rect is final before the view lands.
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  pushYtBounds();
+  const res = await window.deckAPI?.ytPlay?.(item.videoId);
+  if (!res || !res.ok) {
+    stopYouTubeMode();
+    return false;
+  }
+  window.setTimeout(() => { if (ytMode) window.deckAPI?.ytCommand?.('volume', state.playback.volume); }, 1800);
+  return true;
+}
+
+function stopYouTubeMode() {
+  if (!ytMode) return;
+  ytMode = null;
+  document.body.classList.remove('yt-mode');
+  clearTimeout(ytBoundsTimer);
+  window.deckAPI?.ytStop?.();
+}
+
+function handleYtEvent(payload) {
+  if (!ytMode || !payload) return;
+  if (payload.type === 'blocked') {
+    // YouTube itself is refusing to play: almost always the age gate, which
+    // only a signed-in, age-verified account can pass.
+    ytMode.blocked = true;
+    setStatus('LOCKED');
+    setSubtitle(ytAuth.signedIn ? (payload.reason || t('ytNeedSignIn')) : t('ytNeedSignIn'), { sticky: true });
+    if (!ytMode.blockedAt) ytMode.blockedAt = Date.now();
+    return;
+  }
+  if (payload.type === 'progress') {
+    if (ytMode.blocked) { ytMode.blocked = false; setSubtitle(t('ytRestrictedBadge'), { sticky: true }); }
+    ytMode.ready = true;
+    updatePlayButtonLabel(!payload.paused);
+    if (payload.ad) {
+      // An ad is its own video element; showing its clock on the deck's bar
+      // would look like the song jumped. Leave the bar alone and say so.
+      setStatus('AD');
+      return;
+    }
+    const duration = Number(payload.duration) || 0;
+    const time = Number(payload.time) || 0;
+    if (duration > 0) {
+      smoothProgress.time = time;
+      smoothProgress.duration = duration;
+      paintProgress(time, duration);
+    }
+    setStatus(payload.paused ? 'PAUSE' : 'YT');
+    return;
+  }
+  if (payload.type === 'ended') {
+    const finished = ytMode.item;
+    stopYouTubeMode();
+    if (onboardDirty) commitOnBoardChanges('ended');
+    if (sleepArmed) { finishSleep(); return; }
+    if (currentItem && finished && itemKey(currentItem) !== itemKey(finished)) return;
+    playNext(false, { auto: true });
+  }
+}
+
 function wireEvents() {
   els.addBtn.addEventListener('click', addPlaylistFlow);
   els.apiBtn.addEventListener('click', apiKeyFlow);
   els.themeBtn?.addEventListener('click', cycleTheme);
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
   els.searchBtn?.addEventListener('click', trackBrowserFlow);
+  els.accountBtn?.addEventListener('click', accountFlow);
+  window.deckAPI?.onYtAuthChanged?.((info) => {
+    ytAuth = info || { signedIn: false };
+    updateAccountButton();
+    if (ytAuth.signedIn && ytMode) setSubtitle(t('ytRestrictedBadge'), { sticky: true });
+  });
+  window.deckAPI?.onYtEvent?.(handleYtEvent);
   window.addEventListener('keydown', (e) => {
     // Ctrl/Cmd+F (and plain F3) open the track browser from anywhere.
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
@@ -3263,6 +3648,7 @@ function wireEvents() {
   els.volumeSlider.addEventListener('input', () => {
     state.playback.volume = Number(els.volumeSlider.value);
     if (ready) player.setVolume(state.playback.volume);
+    if (ytMode) window.deckAPI?.ytCommand?.('volume', state.playback.volume);
     saveState();
   });
 
@@ -3332,8 +3718,8 @@ function wireEvents() {
     else if (command === 'prev') playPrevious();
   });
 
-  window.addEventListener('resize', updateLayoutClass);
-  new ResizeObserver(updateLayoutClass).observe(document.body);
+  window.addEventListener('resize', () => { updateLayoutClass(); scheduleYtBounds(); });
+  new ResizeObserver(() => { updateLayoutClass(); scheduleYtBounds(); }).observe(document.body);
 
   window.addEventListener('beforeunload', () => {
     try { flushLocalSave(); } catch {}
@@ -3359,6 +3745,7 @@ function sleep(ms) {
 async function gracefulClose() {
   if (gracefulClosing) return;
   gracefulClosing = true;
+  try { stopYouTubeMode(); } catch {}
   try { flushLocalSave(); } catch {}
   try {
     els.closeBtn.disabled = true;
@@ -3445,6 +3832,7 @@ async function boot() {
   await hydratePersistentState();
   wireEvents();
   startClock();
+  refreshYtAuth();
   seedDemoIfEmpty();
   setTrackTitleText(els.trackTitle.textContent);
   commitOnBoardChanges('boot');

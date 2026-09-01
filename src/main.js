@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, net, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, screen, globalShortcut, session, net, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn, execFileSync } = require('child_process');
+const crypto = require('crypto');
 
 let mainWindow = null;
 let tray = null;
@@ -26,7 +27,89 @@ let appBarSignature = '';
 let appBarLiveHwnd = '';
 let ignoreDisplayMetricsUntil = 0;
 let displayMetricsTimer = null;
+let ytSignInWindow = null;
+let ytView = null;
+let ytViewBounds = null;
+let ytIdleTimer = null;
+// Everything Google-account related lives in its own persistent partition, so
+// the sign-in survives restarts and never mixes with the deck's own storage.
+const YT_PARTITION = 'persist:ytdeck-google';
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+function ytSession() {
+  const sess = session.fromPartition(YT_PARTITION);
+  // Google refuses to sign in from anything that looks like an embedded
+  // framework, so this partition always presents a plain Chrome UA.
+  try { sess.setUserAgent(CHROME_UA); } catch {}
+  return sess;
+}
+
+// A YouTube session is 'signed in' when the auth cookies the site itself uses
+// are present. SAPISID is the one that actually gates personalised responses.
+async function ytSignedInInfo() {
+  try {
+    const cookies = await ytSession().cookies.get({ domain: '.youtube.com' });
+    const google = await ytSession().cookies.get({ domain: '.google.com' });
+    const all = [...cookies, ...google];
+    const names = new Set(all.map((c) => c.name));
+    const signedIn = names.has('SAPISID') || names.has('__Secure-3PAPISID');
+    return { signedIn, cookieCount: all.length };
+  } catch (err) {
+    return { signedIn: false, cookieCount: 0, error: err.message || String(err) };
+  }
+}
+
+// YouTube's own web client signs authenticated InnerTube calls with a hash of
+// the SAPISID cookie; without it the cookies alone are ignored and private
+// playlists come back empty.
+async function ytAuthHeaders(origin = 'https://www.youtube.com') {
+  try {
+    const jar = await ytSession().cookies.get({});
+    const pick = (name) => (jar.find((c) => c.name === name) || {}).value;
+    const sapisid = pick('SAPISID') || pick('__Secure-3PAPISID');
+    if (!sapisid) return {};
+    const ts = Math.floor(Date.now() / 1000);
+    const digest = crypto.createHash('sha1').update(`${ts} ${sapisid} ${origin}`).digest('hex');
+    return {
+      Authorization: `SAPISIDHASH ${ts}_${digest}`,
+      'X-Origin': origin,
+      'X-Goog-AuthUser': '0',
+    };
+  } catch {
+    return {};
+  }
+}
+
+// Request through the signed-in partition so cookies ride along. Falls back to
+// an anonymous fetch when the account session is not available.
+function ytRequest(url, { method = 'GET', headers = {}, body = null } = {}) {
+  return new Promise((resolve, reject) => {
+    let request;
+    try {
+      request = net.request({ url, method, session: ytSession(), useSessionCookies: true, redirect: 'follow' });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+    for (const [key, value] of Object.entries(headers)) {
+      if (value != null) request.setHeader(key, String(value));
+    }
+    const chunks = [];
+    request.on('response', (response) => {
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode >= 400) reject(new Error(`YouTube HTTP ${response.statusCode}`));
+        else resolve(text);
+      });
+      response.on('error', reject);
+    });
+    request.on('error', reject);
+    request.on('abort', () => reject(new Error('request aborted')));
+    if (body) request.write(body);
+    request.end();
+  });
+}
 
 function appBarLogPath() {
   try {
@@ -959,6 +1042,7 @@ async function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    destroyYtView();
     mainWindow = null;
   });
 
@@ -1034,6 +1118,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('will-quit', () => {
+  try { destroyYtView(); } catch {}
   globalShortcut.unregisterAll();
   // Last resort for paths that bypass before-quit (e.g. app.exit()).
   try { if (appBarRegistered || appBarProcess || appBarLiveHwnd) removeAppBarSync(appBarLiveHwnd || hwndToString()); } catch {}
@@ -1071,6 +1156,285 @@ ipcMain.handle('deck:setTrayTooltip', (_event, text) => {
 ipcMain.handle('deck:close', () => {
   if (mainWindow) mainWindow.close();
 });
+/* =========================================================================
+ * Google / YouTube account
+ * -------------------------------------------------------------------------
+ * The user signs in themselves in a real YouTube window; the app never sees
+ * or handles the credentials. The resulting cookies live in a persistent
+ * partition, which is what lets age-restricted tracks play on youtube.com
+ * and lets the deck read the account's own playlists.
+ * ========================================================================= */
+/* -------------------------------------------------------------------------
+ * In-deck YouTube view
+ * Age-restricted tracks cannot play in a third-party iframe at all, so those
+ * are played on youtube.com itself inside a view pinned over the preview
+ * panel. The deck keeps ownership of the queue: this view only reports
+ * progress and end-of-video back to the renderer.
+ * ------------------------------------------------------------------------- */
+// Presentation only: the watch page keeps everything it normally renders
+// inside the player (including ads); this simply crops the surrounding site
+// chrome so the deck frame shows the video instead of a miniature web page.
+const YT_VIEW_CSS = `
+  html, body { overflow: hidden !important; background: #000 !important; }
+  #masthead-container, ytd-masthead, #guide, tp-yt-app-drawer, ytd-mini-guide-renderer,
+  #secondary, #below, ytd-comments, #chat, ytd-merch-shelf-renderer, #donation-shelf {
+    display: none !important;
+  }
+  ytd-page-manager, #page-manager { margin: 0 !important; }
+  ytd-watch-flexy #columns, ytd-watch-flexy #primary, ytd-watch-flexy #primary-inner {
+    margin: 0 !important; padding: 0 !important; max-width: 100vw !important; width: 100vw !important;
+  }
+  #player, #player-container, #player-container-outer, #player-container-inner, #movie_player, .html5-video-player {
+    width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important;
+    margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
+  }
+  video.html5-main-video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; object-fit: contain; }
+`;
+
+const YT_VIEW_BRIDGE = `(() => {
+  if (window.__deckBridge) return 'already';
+  window.__deckBridge = true;
+  const pick = () => document.querySelector('video.html5-main-video') || document.querySelector('video');
+  const adShowing = () => !!document.querySelector('.ad-showing, .ytp-ad-player-overlay');
+  const gate = () => {
+    const el = document.querySelector('.ytp-error, yt-playability-error-supported-renderers, #error-screen [class*=reason]');
+    if (!el) return '';
+    return (el.innerText || '').trim().slice(0, 140);
+  };
+  let lastState = '';
+  const report = (type, extra) => {
+    try { console.info('DECKEVT' + JSON.stringify(Object.assign({ type }, extra || {}))); } catch (e) {}
+  };
+  setInterval(() => {
+    const blocked = gate();
+    if (blocked) {
+      if (lastState !== 'blocked') { lastState = 'blocked'; report('blocked', { reason: blocked }); }
+      return;
+    }
+    const v = pick();
+    if (!v) { if (lastState !== 'waiting') { lastState = 'waiting'; report('waiting'); } return; }
+    const ad = adShowing();
+    report('progress', { time: v.currentTime || 0, duration: v.duration || 0, paused: !!v.paused, ad: ad });
+    if (!ad && v.ended) { if (lastState !== 'ended') { lastState = 'ended'; report('ended'); } }
+    else if (v.ended === false) { lastState = ''; }
+  }, 500);
+  window.__deckCmd = (cmd, value) => {
+    const v = pick();
+    if (!v) return false;
+    if (cmd === 'play') { v.play().catch(() => {}); return true; }
+    if (cmd === 'pause') { v.pause(); return true; }
+    if (cmd === 'toggle') { if (v.paused) v.play().catch(() => {}); else v.pause(); return !v.paused; }
+    if (cmd === 'volume') { v.volume = Math.min(1, Math.max(0, Number(value) / 100)); v.muted = false; return true; }
+    if (cmd === 'rate') { try { v.playbackRate = Number(value) || 1; } catch (e) {} return true; }
+    if (cmd === 'seek') { try { v.currentTime = Number(value) || 0; } catch (e) {} return true; }
+    return false;
+  };
+  return 'ready';
+})()`;
+
+// Parking instead of destroying keeps the renderer warm, so a run of
+// age-restricted tracks switches in without paying the process start-up cost
+// again. It is torn down for real once the deck stops needing it.
+function parkYtView() {
+  if (!ytView) return;
+  try { ytView.setBounds({ x: -20000, y: -20000, width: 16, height: 16 }); } catch {}
+  try { ytView.webContents.loadURL('about:blank'); } catch {}
+  clearTimeout(ytIdleTimer);
+  ytIdleTimer = setTimeout(() => { destroyYtView(); }, 180000);
+}
+
+function destroyYtView() {
+  clearTimeout(ytIdleTimer);
+  if (!ytView) return;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(ytView);
+  } catch {}
+  try { ytView.webContents.close(); } catch {}
+  ytView = null;
+}
+
+function applyYtViewBounds() {
+  if (!ytView || !ytViewBounds) return;
+  const r = ytViewBounds;
+  try {
+    ytView.setBounds({
+      x: Math.max(0, Math.round(r.x)),
+      y: Math.max(0, Math.round(r.y)),
+      width: Math.max(1, Math.round(r.width)),
+      height: Math.max(1, Math.round(r.height)),
+    });
+  } catch {}
+}
+
+function ensureYtView() {
+  if (ytView) return ytView;
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  ytView = new WebContentsView({
+    webPreferences: {
+      partition: YT_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  ytView.webContents.setUserAgent(CHROME_UA);
+  ytView.setBorderRadius?.(10);
+  mainWindow.contentView.addChildView(ytView);
+  applyYtViewBounds();
+
+  // The bridge talks back over console messages: no preload script is injected
+  // into youtube.com, so the page keeps its own isolated world.
+  ytView.webContents.on('console-message', (event, level, message) => {
+    if (typeof message !== 'string' || !message.startsWith('DECKEVT')) return;
+    try {
+      const payload = JSON.parse(message.slice(7));
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-view-event', payload);
+    } catch {}
+  });
+  ytView.webContents.on('did-finish-load', () => {
+    ytView?.webContents.insertCSS(YT_VIEW_CSS).catch(() => {});
+    ytView?.webContents.executeJavaScript(YT_VIEW_BRIDGE).catch(() => {});
+  });
+  ytView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  return ytView;
+}
+
+ipcMain.handle('yt:setBounds', (_event, rect) => {
+  ytViewBounds = rect && Number.isFinite(rect.width) ? rect : null;
+  applyYtViewBounds();
+  return true;
+});
+
+ipcMain.handle('yt:play', async (_event, videoId) => {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false, message: 'invalid video id' };
+  clearTimeout(ytIdleTimer);
+  const view = ensureYtView();
+  if (!view) return { ok: false, message: 'view unavailable' };
+  const auth = await ytSignedInInfo();
+  await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
+  return { ok: true, signedIn: auth.signedIn };
+});
+
+ipcMain.handle('yt:command', async (_event, command, value) => {
+  if (!ytView) return false;
+  try {
+    return await ytView.webContents.executeJavaScript(`window.__deckCmd && window.__deckCmd(${JSON.stringify(command)}, ${JSON.stringify(value ?? null)})`);
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('yt:stop', () => {
+  parkYtView();
+  ytViewBounds = null;
+  return true;
+});
+
+ipcMain.handle('yt:status', async () => ytSignedInInfo());
+
+ipcMain.handle('yt:signIn', async () => {
+  if (ytSignInWindow && !ytSignInWindow.isDestroyed()) {
+    ytSignInWindow.focus();
+    return { opened: true, alreadyOpen: true };
+  }
+  const parentBounds = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null;
+  const display = parentBounds ? screen.getDisplayMatching(parentBounds) : screen.getPrimaryDisplay();
+  const width = Math.min(980, Math.max(560, Math.round(display.workArea.width * 0.5)));
+  const height = Math.min(760, Math.max(520, Math.round(display.workArea.height * 0.8)));
+  ytSignInWindow = new BrowserWindow({
+    width,
+    height,
+    x: Math.round(display.workArea.x + (display.workArea.width - width) / 2),
+    y: Math.round(display.workArea.y + (display.workArea.height - height) / 2),
+    title: 'YouTube 로그인',
+    autoHideMenuBar: true,
+    backgroundColor: '#0f0f0f',
+    webPreferences: {
+      partition: YT_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  ytSignInWindow.webContents.setUserAgent(CHROME_UA);
+  ytSignInWindow.setMenuBarVisibility(false);
+  await ytSignInWindow.loadURL('https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F');
+
+  // Close the window by itself once the cookies show a completed sign-in.
+  const poll = setInterval(async () => {
+    if (!ytSignInWindow || ytSignInWindow.isDestroyed()) { clearInterval(poll); return; }
+    const info = await ytSignedInInfo();
+    if (!info.signedIn) return;
+    clearInterval(poll);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-auth-changed', info);
+    setTimeout(() => { try { if (ytSignInWindow && !ytSignInWindow.isDestroyed()) ytSignInWindow.close(); } catch {} }, 900);
+  }, 1200);
+
+  ytSignInWindow.on('closed', async () => {
+    clearInterval(poll);
+    ytSignInWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-auth-changed', await ytSignedInInfo());
+  });
+  return { opened: true };
+});
+
+ipcMain.handle('yt:signOut', async () => {
+  try {
+    await ytSession().clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage'] });
+  } catch (err) {
+    return { signedIn: false, error: err.message || String(err) };
+  }
+  return ytSignedInInfo();
+});
+
+// Lists the playlists that belong to the signed-in account (including private
+// ones). Returns ids only - the track lists are loaded through the existing
+// per-playlist import so both entry points share one code path.
+ipcMain.handle('yt:myPlaylists', async () => {
+  const auth = await ytSignedInInfo();
+  if (!auth.signedIn) return { signedIn: false, playlists: [] };
+  const html = await fetchText('https://www.youtube.com/feed/playlists?hl=en&gl=US', { Referer: 'https://www.youtube.com/' });
+  const data = extractYtInitialData(html);
+  if (!data) throw new Error('Could not read the playlists page');
+  const found = new Map();
+  walk(data, (key, value) => {
+    if (!value || typeof value !== 'object') return;
+    // Modern layout: lockupViewModel with a playlist contentId.
+    if (key === 'lockupViewModel' && value.contentId && value.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+      const id = String(value.contentId);
+      if (found.has(id)) return;
+      const title = value.metadata?.lockupMetadataViewModel?.title?.content || id;
+      let count = 0;
+      walk(value.contentImage || {}, (k, v) => {
+        if (!count && k === 'thumbnailBadgeViewModel' && typeof v?.text === 'string') {
+          const m = /(d[d,]*)/.exec(v.text);
+          if (m) count = Number(m[1].replace(/,/g, ''));
+        }
+      });
+      const sources = value.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources
+        || value.contentImage?.thumbnailViewModel?.image?.sources;
+      const thumbnail = Array.isArray(sources) && sources.length
+        ? [...sources].sort((a, b) => (b.width || 0) - (a.width || 0))[0].url
+        : '';
+      found.set(id, { playlistId: id, title, count, thumbnail });
+    }
+    // Legacy layout kept as a fallback.
+    if ((key === 'gridPlaylistRenderer' || key === 'playlistRenderer') && value.playlistId) {
+      const id = String(value.playlistId);
+      if (found.has(id)) return;
+      found.set(id, {
+        playlistId: id,
+        title: textFrom(value.title) || id,
+        count: Number(String(textFrom(value.videoCountShortText) || textFrom(value.videoCountText) || '0').replace(/[^d]/g, '')) || 0,
+        thumbnail: bestThumb(value.thumbnail) || '',
+      });
+    }
+  });
+  const playlists = [...found.values()].filter((p) => /^[A-Za-z0-9_-]+$/.test(p.playlistId) && p.playlistId !== 'LL');
+  return { signedIn: true, playlists };
+});
+
 ipcMain.handle('deck:loadPersistentState', () => readPersistentStateFile());
 ipcMain.handle('deck:savePersistentState', (_event, data) => writePersistentStateFile(data));
 ipcMain.handle('deck:getPersistentPath', () => documentsStorePath().file);
@@ -1374,7 +1738,30 @@ async function fetchInnertubeContinuation(cfg, continuation) {
   const body = { context, continuation };
   const clientNameHeader = String(cfg.INNERTUBE_CONTEXT_CLIENT_NAME || cfg.INNERTUBE_CLIENT_NAME || '1');
   const clientVersionHeader = String(cfg.INNERTUBE_CONTEXT_CLIENT_VERSION || cfg.INNERTUBE_CLIENT_VERSION || context.client.clientVersion || '2.20240601.00.00');
-  const res = await fetch(`https://www.youtube.com/youtubei/v1/browse?prettyPrint=false&key=${encodeURIComponent(key)}`, {
+  const auth = await ytSignedInInfo();
+  const browseUrl = `https://www.youtube.com/youtubei/v1/browse?prettyPrint=false&key=${encodeURIComponent(key)}`;
+  if (auth.signedIn) {
+    try {
+      const text = await ytRequest(browseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': '*/*',
+          'User-Agent': CHROME_UA,
+          'Origin': 'https://www.youtube.com',
+          'Referer': 'https://www.youtube.com/',
+          'X-YouTube-Client-Name': clientNameHeader,
+          'X-YouTube-Client-Version': clientVersionHeader,
+          ...(await ytAuthHeaders()),
+        },
+        body: JSON.stringify(body),
+      });
+      return JSON.parse(text);
+    } catch (err) {
+      console.warn('Signed-in continuation failed, falling back:', err.message || err);
+    }
+  }
+  const res = await fetch(browseUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1404,6 +1791,17 @@ async function fetchText(url, extraHeaders = {}) {
     'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+667; PREF=hl=en&gl=US',
     ...extraHeaders,
   };
+  // When the user is signed in, go through the account partition so private
+  // and personalised pages resolve; otherwise stay anonymous as before.
+  const auth = await ytSignedInInfo();
+  if (auth.signedIn) {
+    const { Cookie, ...rest } = headers;
+    try {
+      return await ytRequest(url, { headers: { ...rest, ...(await ytAuthHeaders()) } });
+    } catch (err) {
+      console.warn('Signed-in fetch failed, falling back to anonymous:', err.message || err);
+    }
+  }
   const res = await fetch(url, { headers, redirect: 'follow' });
   if (!res.ok) throw new Error(`YouTube page HTTP ${res.status}`);
   return res.text();

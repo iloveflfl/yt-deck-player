@@ -10,10 +10,11 @@
 <body>
   <div id="app" class="deck-shell">
     <div class="deck-topline" data-drag-zone>
-      <div class="brand"><span class="brand-dot"></span> YT Deck Player <span class="version-pill">v3.0</span><button id="themeBtn" class="tiny-btn theme-chip" title="테마 순환"><span class="theme-ico" aria-hidden="true">◐</span><span>Theme:Aurora</span></button></div>
+      <div class="brand"><span class="brand-dot"></span> YT Deck Player <span class="version-pill">v3.1</span><button id="themeBtn" class="tiny-btn theme-chip" title="테마 순환"><span class="theme-ico" aria-hidden="true">◐</span><span>Theme:Aurora</span></button></div>
       <div class="top-actions">
         <span id="deckClock" class="clock-pill" title="현재 시각">--:--</span>
         <span id="statusText" class="status-pill">READY</span>
+        <button id="accountBtn" class="tiny-btn account-chip" title="구글 계정">G</button>
         <button id="langBtn" class="tiny-btn" title="언어 전환">한/EN</button>
         <button id="dockBtn" class="tiny-btn" title="독 위치 전환">DOCK</button>
         <button id="reserveBtn" class="tiny-btn active" title="다른 창이 YT Deck 영역을 침범하지 않게 작업영역을 예약">SPACE</button>
@@ -24,7 +25,7 @@
     </div>
 
     <main class="deck-main">
-      <section class="preview-panel" aria-label="YouTube preview">
+      <section id="previewPanel" class="preview-panel" aria-label="YouTube preview">
         <div id="player" class="youtube-frame"></div>
         <div id="previewFallback" class="preview-fallback">
           <div class="fallback-mark">YT</div>

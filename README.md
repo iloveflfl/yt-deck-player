@@ -24,6 +24,13 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   다른 최대화 창이 덱을 가리지 않습니다(SPACE 버튼). 멀티모니터·혼합 DPI 환경 지원.
 - **트랙 브라우저 + 검색**: 온보드 검색 버튼 또는 Ctrl+F로 열립니다. 곡·아티스트·플레이리스트를 즉시 검색하고(한글 초성 검색 지원),
   화살표로 이동해 Enter나 클릭으로 바로 재생합니다. 수천 곡도 가상 스크롤로 부드럽고, 덱 너비에 맞춰 1~4열로 흐릅니다.
+- **구글 계정 로그인**: 상단 계정 버튼으로 유튜브 공식 로그인 창을 엽니다(비밀번호는 앱이 보거나 저장하지 않음).
+  로그인 상태는 다음 실행에도 유지됩니다.
+- **연령 제한 곡 재생**: 연령 제한 영상은 유튜브가 임베드 플레이어 재생 자체를 막습니다(로그인과 무관).
+  그러므로 해당 곡은 미리보기 패널 자리에 유튜브 페이지를 띄워 재생하고, 끝나면 덱 플레이어로 자동 복귀합니다.
+  한 번 만난 곡은 기억해 다음부터는 실패 없이 바로 전환합니다.
+- **내 재생목록 가져오기**: 로그인 후 계정 카드에서 내 재생목록을 불러와 선택 가져옵니다.
+  이미 같은 재생목록이 있으면 중복 생성 없이 곡만 갱신하고(직접 추가한 곡은 보존), 이름만 겹치면 별도 칩으로 추가합니다.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
@@ -69,6 +76,9 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   artists, and playlists instantly (including Korean initial-consonant queries), move with the arrow
   keys, and play with Enter or a click. Thousands of tracks stay smooth through virtualised rendering,
   and the list flows into 1-4 columns to fit the deck.
+- **Google sign-in**: the account button opens the official YouTube sign-in window (the app never sees or stores the password), and the session is kept for next time.
+- **Age-restricted tracks**: YouTube blocks age-restricted videos from third-party embeds entirely, sign-in or not. Those tracks are therefore played on youtube.com inside the preview panel and hand control back to the deck when they end; once a track is known, the switch happens immediately instead of failing first.
+- **Import my playlists**: after signing in, pick playlists from your own account. A playlist you already have is refreshed in place rather than duplicated (videos you added yourself are kept), and a name-only collision is added as a separate chip.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
