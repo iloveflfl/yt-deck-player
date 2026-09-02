@@ -149,6 +149,16 @@ const I18N = {
     ytRestrictedOpening: '연령 제한 곡 — 유튜브로 전환 중…',
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
+    agTitle: '연령 제한 곡 처리',
+    agHelp: '연령 제한 곡은 유튜브 정책상 어떤 앱 내장 플레이어에서도 재생되지 않습니다. 이미 로그인·연령 인증된 내 브라우저로 넘기거나, 조용히 건너뛸 수 있습니다.',
+    agBrowser: '내 브라우저에서 재생',
+    agSkip: '조용히 건너뛰기',
+    agKnown: '지금까지 확인된 연령 제한 곡',
+    agUnit: '곡',
+    agReset: '기록 지우기',
+    agBadge: '연령',
+    agBadgeTitle: '연령 제한 - 브라우저에서 재생됩니다',
+    tbOnlyGated: '연령 제한만',
     chTitle: '유튜브 채널에서 가져오기',
     chHelp: '로그인도, 설정도 필요 없습니다. 내 채널 주소만 붙여넣으면 공개 재생목록을 그대로 불러옵니다.',
     chPlaceholder: '@내채널  또는  youtube.com/@내채널',
@@ -323,6 +333,16 @@ const I18N = {
     ytRestrictedOpening: 'Age-restricted track — switching to YouTube…',
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
+    agTitle: 'Age-restricted tracks',
+    agHelp: 'YouTube policy blocks age-restricted videos in every in-app player. They can be handed to your own browser, where you are already signed in and verified, or skipped quietly.',
+    agBrowser: 'Play in my browser',
+    agSkip: 'Skip quietly',
+    agKnown: 'Age-restricted tracks found so far',
+    agUnit: 'tracks',
+    agReset: 'Clear the list',
+    agBadge: '18+',
+    agBadgeTitle: 'Age-restricted - plays in your browser',
+    tbOnlyGated: 'Age-restricted only',
     chTitle: 'Import from a YouTube channel',
     chHelp: 'No sign-in, no setup. Paste your channel address and its public playlists come straight in.',
     chPlaceholder: '@yourchannel  or  youtube.com/@yourchannel',
@@ -458,6 +478,7 @@ const defaultState = {
     // Remembering them means the deck can go straight to the YouTube view
     // next time instead of failing into it.
     channelUrl: '',
+    gatedPolicy: 'browser',
     restrictedIds: [],
     // Videos that need a signed-in browser session (age gate).
     gatedIds: [],
@@ -2402,7 +2423,7 @@ function playItem(item) {
   setStatus('LOAD');
 
   if (item.type === 'track' && isGated(item)) {
-    playInBrowser(item);
+    if (!handleGatedTrack(item)) return;
     autoSkipCount = 0;
     return;
   }
@@ -3189,6 +3210,7 @@ function trackBrowserFlow() {
     '    <div class="tb-scopes">',
     '      <button class="mini-action tb-scope" data-scope="board" type="button">' + t('tbScopeBoard') + '</button>',
     '      <button class="mini-action tb-scope" data-scope="library" type="button">' + t('tbScopeLibrary') + '</button>',
+    '      <button id="tbGated" class="mini-action tb-gated" type="button">' + t('tbOnlyGated') + '</button>',
     '    </div>',
     '  </div>',
     '  <div id="tbList" class="tb-list" tabindex="0">',
@@ -3221,12 +3243,13 @@ function trackBrowserFlow() {
     const cls = 'tb-row' + (isCurrent ? ' current' : '') + (index === trackBrowser.sel ? ' selected' : '');
     const lead = isCurrent ? '<span class="tb-playing" aria-hidden="true"></span>' : String(index + 1);
     const thumbStyle = item.thumbnail ? ' style="background-image:url(\'' + escapeAttr(item.thumbnail) + '\')"' : '';
+    const badge = isGated(item) ? '<span class="tb-badge" title="' + escapeAttrText(t('agBadgeTitle')) + '">' + escapeHtml(t('agBadge')) + '</span>' : '';
     return '<button class="' + cls + '" data-i="' + index + '" type="button">'
       + '<span class="tb-idx">' + lead + '</span>'
       + '<span class="tb-thumb"' + thumbStyle + '></span>'
       + '<span class="tb-main"><span class="tb-title">' + highlightMatch(item.title || item.videoId, trackBrowser.query) + '</span>'
       + '<span class="tb-meta">' + highlightMatch(meta, trackBrowser.query) + '</span></span>'
-      + '<span class="tb-dur">' + dur + '</span></button>';
+      + badge + '<span class="tb-dur">' + dur + '</span></button>';
   };
 
   // The scrollable height lives on a canvas sized from the item count alone,
@@ -3275,11 +3298,19 @@ function trackBrowserFlow() {
 
   const applyFilter = (keepScroll) => {
     trackBrowser.filtered = filterBrowserItems(trackBrowser.items, trackBrowser.query);
+    if (trackBrowser.gatedOnly) trackBrowser.filtered = trackBrowser.filtered.filter((x) => isGated(x));
     trackBrowser.sel = Math.min(trackBrowser.sel, Math.max(0, trackBrowser.filtered.length - 1));
     if (!keepScroll) listEl.scrollTop = 0;
     clearEl.classList.toggle('hidden', !trackBrowser.query);
     paint(true);
   };
+
+  document.querySelector('#tbGated')?.addEventListener('click', () => {
+    trackBrowser.gatedOnly = !trackBrowser.gatedOnly;
+    document.querySelector('#tbGated')?.classList.toggle('active', trackBrowser.gatedOnly);
+    trackBrowser.sel = 0;
+    applyFilter(false);
+  });
 
   const setScope = (scope) => {
     trackBrowser.scope = scope;
@@ -3366,7 +3397,19 @@ function trackBrowserFlow() {
 
 // Playing straight from the browser keeps the queue coherent: sequential mode
 // continues from the picked track and the shuffle bag stops repeating it.
+// A track the user picked out by hand overrides the standing skip policy -
+// but only that exact track, and only once. A time window would also catch
+// whatever the deck auto-advanced to moments later.
+let explicitPlayKey = '';
+function markExplicitPlay(item) { explicitPlayKey = item ? itemKey(item) : ''; }
+function consumeExplicitPlay(item) {
+  if (!item || !explicitPlayKey || itemKey(item) !== explicitPlayKey) return false;
+  explicitPlayKey = '';
+  return true;
+}
+
 function playTrackFromBrowser(item) {
+  markExplicitPlay(item);
   if (!ready) { setStatus('WAIT'); return; }
   const pool = buildActivePool();
   const key = itemKey(item);
@@ -3411,6 +3454,21 @@ function isGated(item) {
 // Age-restricted playback happens in the user's own browser, where they are
 // already signed in and verified. The deck holds still rather than talking
 // over it, and picks up again on the next command.
+// Age-restricted tracks have exactly two honest destinations: the user's own
+// signed-in browser, or the skip list. Returns false when the track was skipped.
+function handleGatedTrack(item) {
+  if (!item) return false;
+  if (state.settings.gatedPolicy === 'skip' && !consumeExplicitPlay(item)) {
+    markGated(item.videoId);
+    setStatus('SKIP 18+');
+    setSubtitle(t('ytRestrictedSkip'));
+    handlePlaybackErrorSkip();
+    return false;
+  }
+  playInBrowser(item);
+  return true;
+}
+
 function playInBrowser(item) {
   if (!item || !item.videoId) return;
   markGated(item.videoId);
@@ -3464,6 +3522,8 @@ function accountFlow() {
   const connected = !!oauthState.connected;
   const configured = !!oauthState.configured;
   const savedChannel = state.settings.channelUrl || '';
+  const gatedPolicy = state.settings.gatedPolicy === 'skip' ? 'skip' : 'browser';
+  const gatedCount = (state.settings.gatedIds || []).length;
   showModal(t('ytMyPlaylists'), [
     '<div class="settings-form account-form">',
     // The default path: no account, no setup, just a channel address.
@@ -3476,6 +3536,17 @@ function accountFlow() {
     '    </div>',
     '    <span id="chWhereText" class="tc-status hidden">' + escapeHtml(t('chWhereSteps')) + '</span>',
     '    <span id="chMsg" class="tc-status"></span>',
+    '  </section>',
+    // Age-restricted tracks cannot play in any in-app player, so the only
+    // real choice is where they go instead. Make that choice explicit.
+    '  <section class="settings-field">',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('agTitle')) + '</strong><span>' + escapeHtml(t('agHelp')) + '</span></div>',
+    '    <div class="ag-choice">',
+    '      <button id="agBrowser" class="mini-action' + (gatedPolicy === 'skip' ? '' : ' on') + '" type="button">' + escapeHtml(t('agBrowser')) + '</button>',
+    '      <button id="agSkip" class="mini-action' + (gatedPolicy === 'skip' ? ' on' : '') + '" type="button">' + escapeHtml(t('agSkip')) + '</button>',
+    '    </div>',
+    '    <span class="tc-status">' + escapeHtml(t('agKnown')) + ': ' + gatedCount + ' ' + escapeHtml(t('agUnit')) + '</span>',
+    gatedCount ? '    <div class="account-actions"><button id="agReset" class="mini-action" type="button">' + escapeHtml(t('agReset')) + '</button></div>' : '',
     '  </section>',
     // Everything below is optional and only needed for private playlists.
     '  <section class="settings-field account-advanced">',
@@ -3504,6 +3575,20 @@ function accountFlow() {
 
   const chMsg = (text) => { const el = document.querySelector('#chMsg'); if (el) el.textContent = text || ''; };
   const oaMsg = (text) => { const el = document.querySelector('#oaMsg'); if (el) el.textContent = text || ''; };
+
+  const setGatedPolicy = (value) => {
+    state.settings.gatedPolicy = value;
+    saveState();
+    document.querySelector('#agBrowser')?.classList.toggle('on', value !== 'skip');
+    document.querySelector('#agSkip')?.classList.toggle('on', value === 'skip');
+  };
+  document.querySelector('#agBrowser')?.addEventListener('click', () => setGatedPolicy('browser'));
+  document.querySelector('#agSkip')?.addEventListener('click', () => setGatedPolicy('skip'));
+  document.querySelector('#agReset')?.addEventListener('click', () => {
+    state.settings.gatedIds = [];
+    saveState();
+    accountFlow();
+  });
 
   document.querySelector('#chWhere')?.addEventListener('click', () => {
     document.querySelector('#chWhereText')?.classList.toggle('hidden');
@@ -3782,8 +3867,12 @@ function handleYtEvent(payload) {
   if (!ytMode || !payload) return;
   if (payload.type === 'blocked') {
     // YouTube is refusing to play: the age gate, which no embedded session can
-    // pass. The user's own browser can, so the track continues there.
-    playInBrowser(ytMode.item);
+    // pass. The user's own browser can, so the track continues there - unless
+    // the user would rather not be interrupted.
+    const blockedItem = ytMode.item;
+    markGated(blockedItem?.videoId);
+    stopYouTubeMode();
+    handleGatedTrack(blockedItem);
     return;
   }
   if (payload.type === 'progress') {

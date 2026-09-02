@@ -30,7 +30,13 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 - **구글 계정 연결 (선택)**: *비공개로 저장한* 재생목록까지 필요할 때만 쓰는 고급 항목입니다. 카드 안에 접혀 있으며,
   Google Cloud에서 발급한 데스크톱 앱 OAuth 클라이언트 ID가 필요합니다(앱 안에 6단계 안내 있음). 연결하면 기본 브라우저에서 계정을 고르는 방식이라 비밀번호는 앱을 거치지 않습니다.
 - **재생 불가 곡 처리**: 소유자가 임베드를 막은 곡은 미리보기 패널 자리에 유튜브 페이지를 띄워 그대로 재생하고, 끝나면 덱으로 자동 복귀합니다.
-  연령 제한 곡은 어떤 앱 내장 플레이어로도 재생이 불가능하므로(유튜브 정책), 이미 로그인·연령 인증된 사용자의 기본 브라우저로 넘겨 재생합니다.
+  연령 제한 곡은 어떤 앱 내장 플레이어로도 재생이 불가능합니다(유튜브 정책). 2020년부터 연령 제한 영상은 제3자 임베드가 전면 차단되었고,
+  재생하려면 로그인 + 연령 인증된 세션이 반드시 필요합니다. 우회 수단은 없습니다 — 남의 브라우저 쿠키를 몰래 꺼내오는 것 말고는, 그리고 그건 하지 않습니다.
+  대신 처리 방식을 직접 고를 수 있습니다(☰ 카드 → 연령 제한 곡 처리):
+  - **내 브라우저에서 재생** (기본) — 이미 로그인·연령 인증된 기본 브라우저로 넘깁니다. 한 번 확인된 곡은 기억해 다음부터 바로 넘어갑니다.
+  - **조용히 건너뛰기** — 브라우저를 띄우지 않고 다음 곡으로 넘어갑니다. 건너뛴 곡도 기록은 남습니다.
+  어느 쪽이든 곡이 조용히 사라지지 않습니다. 트랙 목록에서 `연령` 배지로 표시되고, **연령 제한만** 토글로 모아 볼 수 있으며,
+  거기서 직접 고른 곡은 건너뛰기 설정이어도 브라우저로 열립니다.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
@@ -80,7 +86,13 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   No account, no API key, no client ID. The address is remembered, so later it is one click.
   - Playlists already on the board refresh in place instead of duplicating; someone else's playlist that merely shares a name comes in separately as `name (YouTube)`. Hand-added tracks survive a refresh.
 - **Google account (optional)**: only needed to reach playlists you saved as *private*. It is folded away inside the same card and requires a desktop-app OAuth client ID from Google Cloud (six steps, shown in the app). Connecting opens your default browser to pick an account, so the password never goes through the app.
-- **Unplayable tracks**: videos whose owner disabled embedding play on youtube.com inside the preview panel and hand control back to the deck when they end. Age-restricted videos cannot play in any in-app player at all (YouTube policy), so they are handed to your default browser, where you are already signed in and verified.
+- **Unplayable tracks**: videos whose owner disabled embedding play on youtube.com inside the preview panel and hand control back to the deck when they end.
+  Age-restricted videos cannot play in any in-app player at all: YouTube blocked third-party embeds for them in 2020, and playback requires a signed-in, age-verified session.
+  There is no way around that short of lifting cookies out of someone's browser, which this app does not do. You choose what happens instead (☰ card → Age-restricted tracks):
+  - **Play in my browser** (default) — handed to your own browser, where you are already signed in and verified. Once seen, a track goes straight there next time.
+  - **Skip quietly** — moves to the next track without opening anything. Skipped tracks are still recorded.
+  Either way nothing disappears silently: age-restricted tracks carry an `18+` badge in the track list, an **Age-restricted only** toggle collects them,
+  and one you pick there opens in your browser even while the skip policy is on.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
