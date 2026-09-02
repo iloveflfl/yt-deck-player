@@ -151,9 +151,9 @@ const I18N = {
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
     agTitle: '연령 제한 곡 처리',
-    agHelp: '연령 제한 곡은 유튜브 정책상 앱 내장 플레이어에서는 재생되지 않습니다(2020년부터 제3자 임베드 차단). 이미 로그인·연령 인증된 내 브라우저로 넘기거나, 조용히 건너뛸 수 있습니다.',
+    agHelp: '연령 제한 곡은 유튜브 정책상 앱 안에서는 재생할 수 없습니다(2020년부터 제3자 임베드 차단). 기본값은 조용히 건너뛰기입니다. 브라우저로 넘기는 옵션은 작업 중 큰 창이 갑자기 열리므로 직접 켤 때만 동작합니다.',
     agBrowser: '내 브라우저에서 재생',
-    agSkip: '조용히 건너뛰기',
+    agSkip: '조용히 건너뛰기 (기본)',
     agKnown: '지금까지 확인된 연령 제한 곡',
     agUnit: '곡',
     agReset: '기록 지우기',
@@ -316,9 +316,9 @@ const I18N = {
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
     agTitle: 'Age-restricted tracks',
-    agHelp: 'YouTube blocks age-restricted videos from embedding (third-party embeds since 2020), so they cannot play in the deck. They can be handed to your own browser, where you are already signed in and verified, or skipped quietly.',
+    agHelp: 'YouTube blocks age-restricted videos from embedding (third-party embeds since 2020), so they cannot play in the deck. The default is to skip them quietly. Handing one to your browser opens a full window over whatever you are doing, so it only happens if you turn it on.',
     agBrowser: 'Play in my browser',
-    agSkip: 'Skip quietly',
+    agSkip: 'Skip quietly (default)',
     agKnown: 'Age-restricted tracks found so far',
     agUnit: 'tracks',
     agReset: 'Clear the list',
@@ -440,9 +440,10 @@ const defaultState = {
     // Remembering them means the deck can go straight to the YouTube view
     // next time instead of failing into it.
     channelUrl: '',
-    gatedPolicy: 'browser',
+    gatedPolicy: 'skip',
     restrictedIds: [],
     restrictedIdsVerified: false,
+    gatedSkipDefault: false,
     // Videos that need a signed-in browser session (age gate).
     gatedIds: [],
     alarmTime: '',
@@ -1080,7 +1081,14 @@ function normalizeState() {
   // Saved settings can carry values a later build no longer offers (an older
   // in-deck age-gate mode, say). Fold anything unrecognised back to a default
   // so the UI and the playback path never disagree about what is set.
-  if (state.settings.gatedPolicy !== 'skip') state.settings.gatedPolicy = 'browser';
+  if (!['skip', 'browser'].includes(state.settings.gatedPolicy)) state.settings.gatedPolicy = 'skip';
+  // Handing an age-restricted track to a full browser window interrupts whatever
+  // the user is doing. That is now opt-in rather than the default, and existing
+  // installs are moved across once.
+  if (!state.settings.gatedSkipDefault) {
+    state.settings.gatedPolicy = 'skip';
+    state.settings.gatedSkipDefault = true;
+  }
   // Entries recorded before playback classification was verified are unreliable:
   // a single transient embed failure was stored as a permanent verdict. Drop
   // them once so the verified path rebuilds only the truly non-embeddable ones.
@@ -2577,6 +2585,9 @@ async function importPlaylistTracksNoKey(id, opts = {}) {
 }
 
 function showModal(title, bodyHtml, options = {}) {
+  // The in-deck video is a native surface drawn above the page: leave it up and
+  // it covers the dialog entirely.
+  if (ytMode) window.deckAPI?.ytSetViewVisible?.(false);
   els.modalTitle.textContent = title;
   els.modalBody.innerHTML = bodyHtml;
   els.modal.classList.remove('hidden');
@@ -2588,6 +2599,8 @@ function showModal(title, bodyHtml, options = {}) {
 }
 
 function hideModal() {
+  // Bring the in-deck video back now that nothing needs to sit above it.
+  if (ytMode) window.deckAPI?.ytSetViewVisible?.(true);
   try { trackBrowser?.dispose?.(); } catch {}
   trackBrowser = null;
   els.modal.classList.remove('tb-modal');
@@ -3735,10 +3748,22 @@ function previewRect() {
   if (!el) return null;
   const r = el.getBoundingClientRect();
   if (r.width < 40 || r.height < 30) return null;
-  // The view is a native surface, so it cannot inherit the panel's rounded
-  // corners from CSS - send the real radius so it can match them itself.
-  const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-  return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height), radius: Math.round(radius) };
+  // Match the embedded iframe's own box, not the panel's: the iframe sits
+  // inside the panel border and is clipped by its rounding, so using the panel
+  // rect made the in-deck view a visibly larger, harder-edged rectangle. A
+  // native surface cannot inherit CSS clipping, so the radius travels with it.
+  const host = els.player || document.querySelector('#player');
+  const hostRect = host ? host.getBoundingClientRect() : null;
+  const box = hostRect && hostRect.width > 40 && hostRect.height > 30 ? hostRect : r;
+  const panelRadius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+  const border = parseFloat(getComputedStyle(el).borderTopWidth) || 0;
+  return {
+    x: Math.round(box.left),
+    y: Math.round(box.top),
+    width: Math.round(box.width),
+    height: Math.round(box.height),
+    radius: Math.max(0, Math.round(panelRadius - border)),
+  };
 }
 
 function pushYtBounds() {
@@ -3827,17 +3852,28 @@ function handleYtEvent(payload) {
     const duration = Number(payload.duration) || 0;
     const time = Number(payload.time) || 0;
     if (duration > 0 && !isScrubbingProgress) {
-      // Feed the same smoothing the embedded player uses, so the bar glides
-      // between the view's 500ms reports instead of stepping.
-      smoothProgress.time = time;
+      // Ease onto each report instead of snapping to it. The bar is being
+      // interpolated by rAF between these 500ms updates, so assigning the raw
+      // value yanked it backwards twice a second - that was the judder.
+      const now = performance.now();
+      const predicted = visualProgressAt(now);
+      const diff = time - predicted;
+      const snap = payload.paused || Math.abs(diff) > 2.25;
       smoothProgress.duration = duration;
       smoothProgress.playing = !payload.paused;
       smoothProgress.rate = clampSpeed(state.playback.playbackRate || 1);
-      smoothProgress.lastFrameAt = performance.now();
-      smoothProgress.correction = 0;
-      smoothProgress.correctionUntil = 0;
-      lastProgressSample = { time, duration, sampledAt: performance.now(), state: payload.paused ? 2 : 1 };
-      paintProgress(time, duration);
+      smoothProgress.lastFrameAt = now;
+      if (snap) {
+        smoothProgress.time = time;
+        smoothProgress.correction = 0;
+        smoothProgress.correctionUntil = 0;
+      } else {
+        smoothProgress.time = predicted;
+        smoothProgress.correction = diff / 0.5;
+        smoothProgress.correctionUntil = now + 500;
+      }
+      lastProgressSample = { time, duration, sampledAt: now, state: payload.paused ? 2 : 1 };
+      paintProgress(smoothProgress.time, duration);
     }
     setStatus(payload.paused ? 'PAUSE' : 'YT');
     return;

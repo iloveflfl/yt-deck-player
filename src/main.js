@@ -1317,6 +1317,21 @@ ipcMain.handle('yt:command', async (_event, command, value) => {
   }
 });
 
+// A native view always paints above the page, so an open dialog would be
+// hidden behind the video. The renderer parks the view while a modal is up.
+ipcMain.handle('yt:setViewVisible', (_event, visible) => {
+  if (!ytView) return false;
+  try {
+    if (typeof ytView.setVisible === 'function') { ytView.setVisible(!!visible); return true; }
+  } catch {}
+  // Older builds without View.setVisible: move it out of the way instead.
+  try {
+    if (!visible) ytView.setBounds({ x: -20000, y: -20000, width: 16, height: 16 });
+    else applyYtViewBounds();
+  } catch {}
+  return true;
+});
+
 ipcMain.handle('yt:stop', () => {
   parkYtView();
   ytViewBounds = null;
