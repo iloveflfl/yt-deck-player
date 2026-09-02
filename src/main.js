@@ -1639,6 +1639,121 @@ ipcMain.handle('yt:openExternal', async (_event, videoId) => {
   return { ok: true };
 });
 
+/* =========================================================================
+ * Channel playlists (no account required)
+ * -------------------------------------------------------------------------
+ * The zero-setup way to pull in "my playlists": a channel's public playlists
+ * are readable without signing in at all, so a distributed build needs no
+ * OAuth client, no consent screen and no per-user setup. Private playlists
+ * still need the optional OAuth path.
+ * ========================================================================= */
+function channelPlaylistsUrl(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  if (/[?&]list=|\/playlist\b|[?&]v=|\/watch\b|youtu\.be\//i.test(raw)) throw new Error('not-a-channel');
+  let path = '';
+  const urlMatch = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/(.+)$/i.exec(raw);
+  if (urlMatch) {
+    path = urlMatch[1].split('?')[0].replace(/\/+$/, '');
+  } else if (raw.startsWith('@')) {
+    path = raw.split(/[\s/?]/)[0];
+  } else if (/^UC[A-Za-z0-9_-]{10,}$/.test(raw)) {
+    path = `channel/${raw}`;
+  } else if (/^[A-Za-z0-9._-]+$/.test(raw)) {
+    path = `@${raw}`;
+  } else {
+    return '';
+  }
+  path = path.replace(/\/(playlists|videos|featured|streams|shorts|community|about)$/i, '');
+  if (!/^(@[^/]+|channel\/UC[A-Za-z0-9_-]+|c\/[^/]+|user\/[^/]+)$/i.test(path)) return '';
+  return `https://www.youtube.com/${path}/playlists?hl=en&gl=US`;
+}
+
+function collectChannelPlaylists(root, found) {
+  walk(root, (key, value) => {
+    if (!value || typeof value !== 'object') return;
+    if (key === 'lockupViewModel' && value.contentId && value.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+      const id = String(value.contentId);
+      if (found.has(id) || !/^[A-Za-z0-9_-]+$/.test(id)) return;
+      let count = 0;
+      walk(value.contentImage || {}, (k, v) => {
+        if (!count && k === 'thumbnailBadgeViewModel' && typeof v?.text === 'string') {
+          const m = /(\d[\d,]*)/.exec(v.text);
+          if (m) count = Number(m[1].replace(/,/g, ''));
+        }
+      });
+      const sources = value.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources
+        || value.contentImage?.thumbnailViewModel?.image?.sources;
+      found.set(id, {
+        playlistId: id,
+        title: value.metadata?.lockupMetadataViewModel?.title?.content || id,
+        count,
+        thumbnail: Array.isArray(sources) && sources.length
+          ? [...sources].sort((a, b) => (b.width || 0) - (a.width || 0))[0].url
+          : '',
+      });
+      return;
+    }
+    // Older layout, kept so the feature does not break if YouTube rolls back.
+    if ((key === 'gridPlaylistRenderer' || key === 'playlistRenderer') && value.playlistId) {
+      const id = String(value.playlistId);
+      if (found.has(id)) return;
+      found.set(id, {
+        playlistId: id,
+        title: textFrom(value.title) || id,
+        count: Number(String(textFrom(value.videoCountShortText) || textFrom(value.videoCountText) || '0').replace(/[^\d]/g, '')) || 0,
+        thumbnail: bestThumb(value.thumbnail) || '',
+      });
+    }
+  });
+}
+
+ipcMain.handle('yt:channelPlaylists', async (_event, input) => {
+  const url = channelPlaylistsUrl(input);
+  if (!url) throw new Error('invalid channel address');
+  const html = await fetchText(url, { Referer: 'https://www.youtube.com/' });
+  const data = extractYtInitialData(html);
+  if (!data) throw new Error('could not read that channel page');
+  const channelName = data?.metadata?.channelMetadataRenderer?.title
+    || data?.header?.pageHeaderRenderer?.pageTitle
+    || '';
+  const found = new Map();
+  const continuations = [];
+  const seenTokens = new Set();
+  collectChannelPlaylists(data, found);
+  walk(data, (key, value) => {
+    if (key === 'continuationCommand' && value?.token && !seenTokens.has(value.token)) {
+      seenTokens.add(value.token);
+      continuations.push(value.token);
+    }
+  });
+
+  // Channels with many playlists page their list; follow a bounded number of
+  // continuations so large channels come through complete.
+  const cfg = extractYtcfg(html);
+  let guard = 0;
+  while (cfg?.INNERTUBE_API_KEY && continuations.length && guard < 20 && found.size < 400) {
+    guard += 1;
+    try {
+      const page = await fetchInnertubeContinuation(cfg, continuations.shift());
+      const before = found.size;
+      collectChannelPlaylists(page, found);
+      walk(page, (key, value) => {
+        if (key === 'continuationCommand' && value?.token && !seenTokens.has(value.token)) {
+          seenTokens.add(value.token);
+          continuations.push(value.token);
+        }
+      });
+      if (found.size === before) break;
+    } catch (err) {
+      appendAppBarLog('Channel playlist continuation failed', err.message || String(err));
+      break;
+    }
+  }
+
+  return { channelName, playlists: [...found.values()], url };
+});
+
 ipcMain.handle('deck:loadPersistentState', () => readPersistentStateFile());
 ipcMain.handle('deck:savePersistentState', (_event, data) => writePersistentStateFile(data));
 ipcMain.handle('deck:getPersistentPath', () => documentsStorePath().file);

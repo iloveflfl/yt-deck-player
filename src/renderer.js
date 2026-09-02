@@ -149,6 +149,21 @@ const I18N = {
     ytRestrictedOpening: '연령 제한 곡 — 유튜브로 전환 중…',
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
+    chTitle: '유튜브 채널에서 가져오기',
+    chHelp: '로그인도, 설정도 필요 없습니다. 내 채널 주소만 붙여넣으면 공개 재생목록을 그대로 불러옵니다.',
+    chPlaceholder: '@내채널  또는  youtube.com/@내채널',
+    chLoad: '재생목록 불러오기',
+    chLoading: '불러오는 중…',
+    chWhere: '내 채널 주소 어디서 보나요?',
+    chWhereSteps: '유튜브 접속 → 우측 상단 프로필 → 내 채널 → 주소창의 youtube.com/@... 부분을 복사해 붙여넣으세요. 비공개로 저장한 재생목록은 아래 고급 항목이 필요합니다.',
+    chNeedInput: '채널 주소를 입력해 주세요.',
+    chNone: '공개 재생목록을 찾지 못했습니다. 주소를 확인하거나, 재생목록이 비공개인지 확인해 주세요.',
+    chFailed: '불러오지 못했습니다',
+    chNotChannel: '재생목록/영상 링크가 아니라 채널 주소가 필요합니다. 재생목록 하나만 추가하려면 보드의 + 버튼을 쓰세요.',
+    oaOptional: '선택 사항',
+    oaWhen: '비공개 재생목록까지 가져와야 할 때만 사용하세요. 개발자용 설정이 필요합니다.',
+    oaShow: '고급 설정 열기',
+    oaMyPrivate: '비공개 포함 재생목록 가져오기',
     oaTitle: '구글 계정 연결',
     oaConnected: '연결됨',
     oaDisconnected: '연결 안 됨',
@@ -308,6 +323,21 @@ const I18N = {
     ytRestrictedOpening: 'Age-restricted track — switching to YouTube…',
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
+    chTitle: 'Import from a YouTube channel',
+    chHelp: 'No sign-in, no setup. Paste your channel address and its public playlists come straight in.',
+    chPlaceholder: '@yourchannel  or  youtube.com/@yourchannel',
+    chLoad: 'Load playlists',
+    chLoading: 'Loading...',
+    chWhere: 'Where do I find my channel address?',
+    chWhereSteps: 'Open YouTube, click your profile picture, choose Your channel, then copy the youtube.com/@... part of the address bar. Playlists you saved as private need the advanced section below.',
+    chNeedInput: 'Enter a channel address first.',
+    chNone: 'No public playlists found. Check the address, or the playlists may be private.',
+    chFailed: 'Could not load',
+    chNotChannel: 'That is a playlist or video link, not a channel address. To add a single playlist, use the + button on the board.',
+    oaOptional: 'optional',
+    oaWhen: 'Only needed to reach playlists you saved as private. Requires developer setup.',
+    oaShow: 'Open advanced setup',
+    oaMyPrivate: 'Import playlists including private',
     oaTitle: 'Google account',
     oaConnected: 'Connected',
     oaDisconnected: 'Not connected',
@@ -427,6 +457,7 @@ const defaultState = {
     // Video ids YouTube refuses to embed (age-restricted or embedding off).
     // Remembering them means the deck can go straight to the YouTube view
     // next time instead of failing into it.
+    channelUrl: '',
     restrictedIds: [],
     // Videos that need a signed-in browser session (age gate).
     gatedIds: [],
@@ -3432,64 +3463,94 @@ async function refreshOauth() {
 function accountFlow() {
   const connected = !!oauthState.connected;
   const configured = !!oauthState.configured;
-  showModal(t('oaTitle'), [
+  const savedChannel = state.settings.channelUrl || '';
+  showModal(t('ytMyPlaylists'), [
     '<div class="settings-form account-form">',
-    '  <section class="settings-field account-state">',
-    '    <div class="account-avatar' + (connected ? ' on' : '') + '" aria-hidden="true">G</div>',
-    '    <div class="field-copy">',
-    '      <strong>' + escapeHtml(connected ? t('oaConnected') : t('oaDisconnected')) + (connected && oauthState.email ? ' · ' + escapeHtml(oauthState.email) : '') + '</strong>',
-    '      <span>' + escapeHtml(t('oaHow')) + '</span>',
-    '    </div>',
-    '  </section>',
+    // The default path: no account, no setup, just a channel address.
     '  <section class="settings-field">',
-    '    <div class="field-copy"><strong>' + escapeHtml(t('oaSetupTitle')) + '</strong><span>' + escapeHtml(t('oaSetupHelp')) + '</span></div>',
-    '    <input id="oaClientId" class="text-input" placeholder="' + escapeAttrText(t('oaClientId')) + '" autocomplete="off" spellcheck="false" />',
-    '    <input id="oaClientSecret" class="text-input" placeholder="' + escapeAttrText(t('oaClientSecret')) + '" autocomplete="off" spellcheck="false" />',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('chTitle')) + '</strong><span>' + escapeHtml(t('chHelp')) + '</span></div>',
+    '    <input id="chInput" class="text-input" placeholder="' + escapeAttrText(t('chPlaceholder')) + '" autocomplete="off" spellcheck="false" value="' + escapeAttrText(savedChannel) + '" />',
     '    <div class="account-actions">',
-    '      <button id="oaSave" class="mini-action" type="button">' + escapeHtml(t('oaSave')) + '</button>',
-    '      <button id="oaGuide" class="mini-action" type="button">' + escapeHtml(t('oaGuide')) + '</button>',
+    '      <button id="chLoad" class="file-pick-btn" type="button">' + escapeHtml(t('chLoad')) + '</button>',
+    '      <button id="chWhere" class="mini-action" type="button">' + escapeHtml(t('chWhere')) + '</button>',
     '    </div>',
-    '    <span id="oaGuideText" class="tc-status hidden">' + escapeHtml(t('oaGuideSteps')) + '</span>',
+    '    <span id="chWhereText" class="tc-status hidden">' + escapeHtml(t('chWhereSteps')) + '</span>',
+    '    <span id="chMsg" class="tc-status"></span>',
     '  </section>',
-    '  <section class="settings-field">',
-    '    <div class="field-copy"><strong>' + escapeHtml(t('ytMyPlaylists')) + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
-    '    <div class="account-actions">',
+    // Everything below is optional and only needed for private playlists.
+    '  <section class="settings-field account-advanced">',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('oaTitle')) + ' · ' + escapeHtml(t('oaOptional')) + '</strong><span>' + escapeHtml(t('oaWhen')) + '</span></div>',
+    '    <button id="oaToggle" class="mini-action" type="button">' + escapeHtml(connected ? t('oaConnected') : t('oaShow')) + '</button>',
+    '    <div id="oaPanel" class="oa-panel' + (connected ? '' : ' hidden') + '">',
+    '      <div class="account-state">',
+    '        <div class="account-avatar' + (connected ? ' on' : '') + '" aria-hidden="true">G</div>',
+    '        <div class="field-copy"><strong>' + escapeHtml(connected ? t('oaConnected') : t('oaDisconnected')) + (connected && oauthState.email ? ' · ' + escapeHtml(oauthState.email) : '') + '</strong><span>' + escapeHtml(t('oaHow')) + '</span></div>',
+    '      </div>',
+    connected ? '' : '      <input id="oaClientId" class="text-input" placeholder="' + escapeAttrText(t('oaClientId')) + '" autocomplete="off" spellcheck="false" />',
+    '      <div class="account-actions">',
     connected
-      ? '      <button id="oaPlaylists" class="file-pick-btn" type="button">' + escapeHtml(t('ytMyPlaylists')) + '</button>'
-      : '      <button id="oaConnect" class="file-pick-btn" type="button"' + (configured ? '' : ' disabled') + '>' + escapeHtml(t('oaConnect')) + '</button>',
-    connected ? '      <button id="oaDisconnect" class="mini-action" type="button">' + escapeHtml(t('oaDisconnect')) + '</button>' : '',
+      ? '        <button id="oaPlaylists" class="file-pick-btn" type="button">' + escapeHtml(t('oaMyPrivate')) + '</button><button id="oaDisconnect" class="mini-action" type="button">' + escapeHtml(t('oaDisconnect')) + '</button>'
+      : '        <button id="oaSave" class="mini-action" type="button">' + escapeHtml(t('oaSave')) + '</button><button id="oaConnect" class="mini-action accent" type="button"' + (configured ? '' : ' disabled') + '>' + escapeHtml(t('oaConnect')) + '</button><button id="oaGuide" class="mini-action" type="button">' + escapeHtml(t('oaGuide')) + '</button>',
+    '      </div>',
+    '      <span id="oaGuideText" class="tc-status hidden">' + escapeHtml(t('oaGuideSteps')) + '</span>',
+    '      <span id="oaMsg" class="tc-status"></span>',
     '    </div>',
-    '    <span id="oaMsg" class="tc-status"></span>',
     '  </section>',
     '  <div class="form-actions settings-actions">',
     '    <button id="oaClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
     '  </div>',
     '</div>',
-  ].join('\n'));
+  ].join('\n'), { focus: '#chInput' });
 
-  const msg = (text) => { const el = document.querySelector('#oaMsg'); if (el) el.textContent = text || ''; };
+  const chMsg = (text) => { const el = document.querySelector('#chMsg'); if (el) el.textContent = text || ''; };
+  const oaMsg = (text) => { const el = document.querySelector('#oaMsg'); if (el) el.textContent = text || ''; };
 
+  document.querySelector('#chWhere')?.addEventListener('click', () => {
+    document.querySelector('#chWhereText')?.classList.toggle('hidden');
+  });
+  const loadChannel = async () => {
+    const value = document.querySelector('#chInput')?.value.trim();
+    if (!value) { chMsg(t('chNeedInput')); return; }
+    const button = document.querySelector('#chLoad');
+    if (button) { button.disabled = true; button.textContent = t('chLoading'); }
+    chMsg(t('chLoading'));
+    try {
+      const result = await window.deckAPI?.channelPlaylists?.(value);
+      state.settings.channelUrl = value;
+      saveState();
+      if (!result || !result.playlists?.length) { chMsg(t('chNone')); if (button) { button.disabled = false; button.textContent = t('chLoad'); } return; }
+      myPlaylistsFlow({ playlists: result.playlists, source: 'channel', channelName: result.channelName });
+    } catch (err) {
+      chMsg(/not-a-channel/.test(err.message || '') ? t('chNotChannel') : t('chFailed') + ': ' + (err.message || err));
+      if (button) { button.disabled = false; button.textContent = t('chLoad'); }
+    }
+  };
+  document.querySelector('#chLoad')?.addEventListener('click', loadChannel);
+  document.querySelector('#chInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadChannel(); });
+
+  document.querySelector('#oaToggle')?.addEventListener('click', () => {
+    document.querySelector('#oaPanel')?.classList.toggle('hidden');
+  });
   document.querySelector('#oaGuide')?.addEventListener('click', () => {
     document.querySelector('#oaGuideText')?.classList.toggle('hidden');
   });
   document.querySelector('#oaSave')?.addEventListener('click', async () => {
     const id = document.querySelector('#oaClientId')?.value.trim();
-    const secret = document.querySelector('#oaClientSecret')?.value.trim();
-    if (!id) { msg(t('oaNeedSetup')); return; }
-    oauthState = await window.deckAPI?.oauthConfigure?.(id, secret);
+    if (!id) { oaMsg(t('oaNeedSetup')); return; }
+    oauthState = await window.deckAPI?.oauthConfigure?.(id, '');
     updateAccountButton();
     accountFlow();
+    document.querySelector('#oaPanel')?.classList.remove('hidden');
   });
   document.querySelector('#oaConnect')?.addEventListener('click', async () => {
-    msg(t('oaConnecting'));
+    oaMsg(t('oaConnecting'));
     const res = await window.deckAPI?.oauthConnect?.();
     if (res && res.ok) {
       oauthState = res.status;
       updateAccountButton();
       accountFlow();
-      setSubtitle(t('oaConnected') + (oauthState.email ? ' · ' + oauthState.email : ''));
     } else {
-      msg(t('oaFailed') + ': ' + ((res && res.message) || ''));
+      oaMsg(t('oaFailed') + ': ' + ((res && res.message) || ''));
     }
   });
   document.querySelector('#oaDisconnect')?.addEventListener('click', async () => {
@@ -3500,13 +3561,12 @@ function accountFlow() {
   document.querySelector('#oaPlaylists')?.addEventListener('click', () => myPlaylistsFlow());
   document.querySelector('#oaClose')?.addEventListener('click', hideModal);
 }
-
 function updateAccountButton() {
   if (!els.accountBtn) return;
   const on = !!oauthState.connected;
   els.accountBtn.classList.toggle('active', on);
-  els.accountBtn.title = t('oaTitle') + ' - ' + (on ? t('oaConnected') : t('oaDisconnected'));
-  els.accountBtn.innerHTML = '<span class="account-glyph" aria-hidden="true">G</span><span class="account-dot' + (on ? ' on' : '') + '"></span>';
+  els.accountBtn.title = t('ytMyPlaylists') + (on ? ' - ' + t('oaConnected') + (oauthState.email ? ' ' + oauthState.email : '') : '');
+  els.accountBtn.innerHTML = '<span class="account-glyph" aria-hidden="true">☰</span><span class="account-dot' + (on ? ' on' : '') + '"></span>';
 }
 
 // Refreshes one chip from the official API. Mirrors the no-key importer's
@@ -3566,6 +3626,7 @@ function simpleModal(title, headline, detail) {
 // by retries and by tests, since the bridged API object is frozen).
 async function myPlaylistsFlow(preloaded = null) {
   simpleModal(t('ytMyPlaylists'), t('ytLoadingPlaylists'));
+  const fromChannel = !!(preloaded && preloaded.source === 'channel');
   let result = preloaded;
   try {
     if (!result) result = await window.deckAPI?.apiPlaylists?.();
@@ -3598,7 +3659,7 @@ async function myPlaylistsFlow(preloaded = null) {
   showModal(t('ytMyPlaylists'), [
     '<div class="settings-form yp-form">',
     '  <section class="settings-field yp-head">',
-    '    <div class="field-copy"><strong>' + playlists.length + ' ' + escapeHtml(t('ytMyPlaylists')) + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
+    '    <div class="field-copy"><strong>' + playlists.length + ' ' + escapeHtml(t('ytMyPlaylists')) + (preloaded && preloaded.channelName ? ' · ' + escapeHtml(preloaded.channelName) : '') + '</strong><span>' + escapeHtml(t('ytPickHelp')) + '</span></div>',
     '    <div class="yp-bulk"><button id="ypAll" class="mini-action" type="button">' + escapeHtml(t('ytSelectAll')) + '</button><button id="ypNone" class="mini-action" type="button">' + escapeHtml(t('ytSelectNone')) + '</button></div>',
     '  </section>',
     '  <section class="settings-field yp-list-field"><div class="yp-list">' + rows + '</div></section>',
@@ -3640,7 +3701,8 @@ async function myPlaylistsFlow(preloaded = null) {
           tracks: [],
           sourceTracks: [],
           manualTracks: [],
-          fromAccount: true,
+          fromAccount: !fromChannel,
+          fromChannel,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -3651,7 +3713,10 @@ async function myPlaylistsFlow(preloaded = null) {
         refreshed += 1;
       }
       setSubtitle(t('ytImportBusy') + ' ' + (remote.title || playlistId));
-      await importPlaylistViaApi(chip.id, { silentFail: true });
+      // Public channel playlists import through the same scraper the link
+      // flow uses; account playlists go through the authorised API.
+      if (fromChannel) await importPlaylistTracksNoKey(chip.id, { silentFail: true });
+      else await importPlaylistViaApi(chip.id, { silentFail: true });
       if (!(getPlaylist(chip.id)?.tracks || []).length) failed += 1;
     }
     render();

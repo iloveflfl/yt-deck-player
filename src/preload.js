@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('deckAPI', {
   oauthConfigure: (clientId, clientSecret) => ipcRenderer.invoke('yt:oauthConfigure', clientId, clientSecret),
   oauthConnect: () => ipcRenderer.invoke('yt:oauthConnect'),
   oauthDisconnect: () => ipcRenderer.invoke('yt:oauthDisconnect'),
+  channelPlaylists: (input) => ipcRenderer.invoke('yt:channelPlaylists', input),
   apiPlaylists: () => ipcRenderer.invoke('yt:apiPlaylists'),
   apiPlaylistItems: (playlistId) => ipcRenderer.invoke('yt:apiPlaylistItems', playlistId),
   openExternalVideo: (videoId) => ipcRenderer.invoke('yt:openExternal', videoId),

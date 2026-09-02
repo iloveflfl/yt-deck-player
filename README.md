@@ -24,10 +24,11 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   다른 최대화 창이 덱을 가리지 않습니다(SPACE 버튼). 멀티모니터·혼합 DPI 환경 지원.
 - **트랙 브라우저 + 검색**: 온보드 검색 버튼 또는 Ctrl+F로 열립니다. 곡·아티스트·플레이리스트를 즉시 검색하고(한글 초성 검색 지원),
   화살표로 이동해 Enter나 클릭으로 바로 재생합니다. 수천 곡도 가상 스크롤로 부드럽고, 덱 너비에 맞춰 1~4열로 흐릅니다.
-- **구글 계정 연결(OAuth)**: 상단 계정 버튼 → 기본 브라우저가 열리고 이미 로그인된 계정을 고르면 끝입니다.
-  비밀번호는 앱을 거치지 않으며, 연결은 다음 실행에도 유지됩니다. 최초 1회 Google Cloud에서 데스크톱 앱 OAuth 클라이언트 ID 발급이 필요합니다(앱 안에 안내 있음).
-- **내 재생목록 가져오기**: 연결 후 공식 YouTube Data API로 내 재생목록(비공개 포함)을 선택 가져옵니다.
-  이미 같은 재생목록이 있으면 중복 생성 없이 곡만 갱신하고(직접 추가한 곡은 보존), 이름만 겹치면 별도 칩으로 추가합니다.
+- **내 재생목록 가져오기 (로그인·설정 없음)**: 상단 ☰ 버튼 → 내 채널 주소(`@내채널`)만 붙여넣으면 공개 재생목록이 전부 목록으로 뜨고, 원하는 것만 골라 한 번에 들어옵니다.
+  계정 연결도, API 키도, 클라이언트 ID도 필요 없습니다. 채널 주소는 기억되어 다음부터는 버튼 한 번이면 됩니다.
+  - 이미 있는 재생목록은 중복 없이 갱신되고, 이름만 같은 남의 목록은 `이름 (YouTube)`로 따로 들어옵니다. 직접 추가한 곡은 갱신해도 남습니다.
+- **구글 계정 연결 (선택)**: *비공개로 저장한* 재생목록까지 필요할 때만 쓰는 고급 항목입니다. 카드 안에 접혀 있으며,
+  Google Cloud에서 발급한 데스크톱 앱 OAuth 클라이언트 ID가 필요합니다(앱 안에 6단계 안내 있음). 연결하면 기본 브라우저에서 계정을 고르는 방식이라 비밀번호는 앱을 거치지 않습니다.
 - **재생 불가 곡 처리**: 소유자가 임베드를 막은 곡은 미리보기 패널 자리에 유튜브 페이지를 띄워 그대로 재생하고, 끝나면 덱으로 자동 복귀합니다.
   연령 제한 곡은 어떤 앱 내장 플레이어로도 재생이 불가능하므로(유튜브 정책), 이미 로그인·연령 인증된 사용자의 기본 브라우저로 넘겨 재생합니다.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
@@ -75,8 +76,10 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   artists, and playlists instantly (including Korean initial-consonant queries), move with the arrow
   keys, and play with Enter or a click. Thousands of tracks stay smooth through virtualised rendering,
   and the list flows into 1-4 columns to fit the deck.
-- **Google account (OAuth)**: the account button opens your default browser, where you pick an account you are already signed into. The password never goes through the app and the connection survives restarts. A one-time desktop-app OAuth client ID from Google Cloud is required (the app walks you through it).
-- **Import my playlists**: once connected, pick playlists from your own account through the official YouTube Data API, private ones included. A playlist already in the library is refreshed in place rather than duplicated (videos you added by hand are kept); a name-only collision is added as a separate chip.
+- **Import my playlists (no sign-in, no setup)**: the ☰ button takes a channel address (`@yourchannel`), lists every public playlist on it, and imports the ones you tick.
+  No account, no API key, no client ID. The address is remembered, so later it is one click.
+  - Playlists already on the board refresh in place instead of duplicating; someone else's playlist that merely shares a name comes in separately as `name (YouTube)`. Hand-added tracks survive a refresh.
+- **Google account (optional)**: only needed to reach playlists you saved as *private*. It is folded away inside the same card and requires a desktop-app OAuth client ID from Google Cloud (six steps, shown in the app). Connecting opens your default browser to pick an account, so the password never goes through the app.
 - **Unplayable tracks**: videos whose owner disabled embedding play on youtube.com inside the preview panel and hand control back to the deck when they end. Age-restricted videos cannot play in any in-app player at all (YouTube policy), so they are handed to your default browser, where you are already signed in and verified.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
