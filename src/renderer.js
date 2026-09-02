@@ -3812,7 +3812,14 @@ async function startYouTubeMode(item) {
     window.deckAPI?.ytStop?.();
     return false;
   }
-  window.setTimeout(() => { if (ytMode && currentItem && itemKey(currentItem) === itemKey(item)) ytSendCommand('volume', state.playback.volume); }, 1800);
+  // A fresh view starts at YouTube's own defaults, so hand it the deck's
+  // current settings. Missing the rate here meant a 1.5x session silently
+  // dropped to 1x the moment an embed-blocked track came up.
+  window.setTimeout(() => {
+    if (!ytMode || !currentItem || itemKey(currentItem) !== itemKey(item)) return;
+    ytSendCommand('volume', state.playback.volume);
+    ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1));
+  }, 1800);
   return true;
 }
 
@@ -3849,6 +3856,10 @@ function handleYtEvent(payload) {
       setStatus(payload.paused ? 'PAUSE' : 'AD');
       return;
     }
+    // YouTube resets playbackRate on its own (new load, after an ad), so keep
+    // nudging it back to whatever the deck is set to instead of setting it once.
+    const wantRate = clampSpeed(state.playback.playbackRate || 1);
+    if (Number.isFinite(payload.rate) && Math.abs(payload.rate - wantRate) > 0.01) ytSendCommand('rate', wantRate);
     const duration = Number(payload.duration) || 0;
     const time = Number(payload.time) || 0;
     if (duration > 0 && !isScrubbingProgress) {

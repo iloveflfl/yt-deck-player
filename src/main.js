@@ -1194,7 +1194,7 @@ const YT_VIEW_BRIDGE = `(() => {
     const v = pick();
     if (!v) { if (lastState !== 'waiting') { lastState = 'waiting'; report('waiting'); } return; }
     const ad = adShowing();
-    report('progress', { time: v.currentTime || 0, duration: v.duration || 0, paused: !!v.paused, ad: ad });
+    report('progress', { time: v.currentTime || 0, duration: v.duration || 0, paused: !!v.paused, ad: ad, rate: v.playbackRate || 1 });
     if (!ad && v.ended) { if (lastState !== 'ended') { lastState = 'ended'; report('ended'); } }
     else if (v.ended === false) { lastState = ''; }
   }, 500);
