@@ -2450,7 +2450,7 @@ function playItem(item) {
     // With the companion set up, an age-restricted track plays inside the deck
     // and continues the queue like any other. Otherwise it falls to the
     // browser / skip choice.
-    if (state.settings.gatedPolicy === 'indeck' && companionState.paired) {
+    if (state.settings.gatedPolicy === 'indeck' && companionState.connected) {
       startYouTubeMode(item, { gated: true });
     } else if (!handleGatedTrack(item)) {
       return;
@@ -3921,9 +3921,14 @@ function ytSendCommand(command, value) {
 // view (cookies fetched from the companion just-in-time). Everything after the
 // load - progress, pause, end-of-track hand-off - is shared with the ordinary
 // in-deck view, so a gated track continues the queue like any other.
+let ytStartSeq = 0;
 async function startYouTubeMode(item, opts = {}) {
   if (!item || !item.videoId) return false;
   const gated = !!(opts && opts.gated);
+  // Fetching gated cookies can take a moment; a generation counter lets a newer
+  // start supersede an older one so a slow start never tears down the view a
+  // faster one already owns.
+  const seq = ++ytStartSeq;
   ytMode = { videoId: item.videoId, item, startedAt: Date.now(), ready: false, gated };
   document.body.classList.add('yt-mode');
   els.previewFallback.classList.add('hidden');
@@ -3936,9 +3941,12 @@ async function startYouTubeMode(item, opts = {}) {
   const res = gated
     ? await window.deckAPI?.ytPlayGated?.(item.videoId)
     : await window.deckAPI?.ytPlay?.(item.videoId);
+  // A newer playback started while we waited: it owns the view now, so bow out
+  // without touching anything.
+  if (seq !== ytStartSeq) return false;
   if (!res || !res.ok) {
     stopYouTubeMode();
-    if (gated) {
+    if (gated && currentItem && itemKey(currentItem) === itemKey(item)) {
       // The companion did not answer, or its session no longer passes the age
       // gate. Never lose the track: fall back to the browser / skip choice.
       markGated(item.videoId);
@@ -3946,7 +3954,13 @@ async function startYouTubeMode(item, opts = {}) {
     }
     return false;
   }
-  window.setTimeout(() => { if (ytMode) ytSendCommand('volume', state.playback.volume); }, 1800);
+  // Superseded by a skip to a non-YouTube track: tear down whatever we started.
+  if (!currentItem || itemKey(currentItem) !== itemKey(item)) {
+    stopYouTubeMode();
+    if (gated) window.deckAPI?.ytGatedStop?.(); else window.deckAPI?.ytStop?.();
+    return false;
+  }
+  window.setTimeout(() => { if (ytMode && currentItem && itemKey(currentItem) === itemKey(item)) ytSendCommand('volume', state.playback.volume); }, 1800);
   return true;
 }
 

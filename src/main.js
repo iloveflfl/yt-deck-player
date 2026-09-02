@@ -1420,10 +1420,34 @@ function companionOriginOk(req) {
   return /^chrome-extension:\/\//.test(o) || /^moz-extension:\/\//.test(o);
 }
 
+// The pairing secret (token + pin + preferred port) is remembered across
+// launches, so pairing the extension is a one-time step - not something the
+// user redoes every time the deck starts. This is only the loopback handshake
+// secret; no YouTube cookies are ever written here.
+function companionCredsPath() {
+  return path.join(app.getPath('userData'), 'companion.json');
+}
+function loadCompanionCreds() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(companionCredsPath(), 'utf8'));
+    if (raw && typeof raw.token === 'string' && typeof raw.pin === 'string') return raw;
+  } catch {}
+  return null;
+}
+function saveCompanionCreds() {
+  try {
+    fs.writeFileSync(companionCredsPath(), JSON.stringify({ token: companionToken, pin: companionPin, port: companionPort }), { mode: 0o600 });
+  } catch (err) {
+    appendAppBarLog('Companion creds save failed', err.message || String(err));
+  }
+}
+
 function startCompanionServer() {
   if (companionServer) return Promise.resolve(companionInfo());
-  companionPin = String(crypto.randomInt(100000, 1000000));
-  companionToken = crypto.randomBytes(24).toString('hex');
+  const saved = loadCompanionCreds();
+  companionPin = saved ? saved.pin : String(crypto.randomInt(100000, 1000000));
+  companionToken = saved ? saved.token : crypto.randomBytes(24).toString('hex');
+  const preferredPort = saved && Number.isInteger(saved.port) ? saved.port : 0;
   companionServer = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     const done = (code, obj) => {
@@ -1469,12 +1493,25 @@ function startCompanionServer() {
     }
     done(404, { error: 'not found' });
   });
-  return new Promise((resolve, reject) => {
-    companionServer.once('error', reject);
-    companionServer.listen(0, '127.0.0.1', () => {
-      companionPort = companionServer.address().port;
-      resolve(companionInfo());
-    });
+  return new Promise((resolve) => {
+    // Reuse the remembered port so an already-paired extension reconnects
+    // without the user re-pairing; if it is taken, fall back to a free one
+    // (the user re-pairs only in that rare case).
+    const bind = (port, allowFallback) => {
+      companionServer.removeAllListeners('error');
+      companionServer.once('error', (err) => {
+        if (allowFallback && (err.code === 'EADDRINUSE' || err.code === 'EACCES')) { bind(0, false); return; }
+        appendAppBarLog('Companion server bind failed', err.message || String(err));
+        companionServer = null;
+        resolve(companionInfo());
+      });
+      companionServer.listen(port, '127.0.0.1', () => {
+        companionPort = companionServer.address().port;
+        saveCompanionCreds();
+        resolve(companionInfo());
+      });
+    };
+    bind(preferredPort, true);
   });
 }
 
