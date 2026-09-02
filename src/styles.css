@@ -1933,6 +1933,7 @@ body.is-dock-side .modal-head strong { min-width: 0; overflow: hidden; text-over
 }
 .account-advanced .field-copy strong { color: var(--muted); }
 .oa-panel { display: grid; gap: 7px; margin-top: 2px; }
+.pair-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 800; letter-spacing: .06em; padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); user-select: all; }
 .oa-panel.hidden { display: none; }
 .oa-panel .account-state { grid-template-columns: auto 1fr; align-items: center; gap: 9px; }
 .oa-panel .account-avatar { width: 30px; height: 30px; font-size: 12px; }

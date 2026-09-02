@@ -1070,6 +1070,7 @@ app.whenReady().then(async () => {
   appendAppBarLog('Startup reserve-space preference', { reserveSpaceEnabled });
   await createWindow();
   createTray();
+  startCompanionServer().catch((err) => appendAppBarLog('Companion server failed to start', err.message || String(err)));
 
   globalShortcut.register('CommandOrControl+Alt+D', () => {
     if (mainWindow) mainWindow.webContents.toggleDevTools();
@@ -1124,6 +1125,8 @@ app.on('will-quit', () => {
   try { unregisterAppBar(); } catch {}
   try { tray?.destroy(); } catch {}
   if (localServer) localServer.close();
+  try { destroyGatedView(); } catch {}
+  if (companionServer) companionServer.close();
 });
 
 ipcMain.handle('deck:getBounds', () => getDeckBounds());
@@ -1302,6 +1305,18 @@ function ensureYtView() {
 ipcMain.handle('yt:setBounds', (_event, rect) => {
   ytViewBounds = rect && Number.isFinite(rect.width) ? rect : null;
   applyYtViewBounds();
+  // The gated view shares the same panel rect, so one bounds channel serves
+  // both and neither strands off-screen on a dock or resize.
+  if (gatedView && ytViewBounds) {
+    try {
+      gatedView.setBounds({
+        x: Math.max(0, Math.round(ytViewBounds.x)),
+        y: Math.max(0, Math.round(ytViewBounds.y)),
+        width: Math.max(1, Math.round(ytViewBounds.width)),
+        height: Math.max(1, Math.round(ytViewBounds.height)),
+      });
+    } catch {}
+  }
   return true;
 });
 
@@ -1340,6 +1355,289 @@ ipcMain.handle('yt:stop', () => {
 });
 
 ipcMain.handle('yt:status', async () => ytSignedInInfo());
+
+/* =========================================================================
+ * Companion loopback server + ephemeral gated playback
+ * -------------------------------------------------------------------------
+ * Age-restricted tracks only play on youtube.com in a signed-in session. This
+ * app never stores that session: a browser extension the user installs holds
+ * their YouTube cookies, and hands them over just-in-time for one playback.
+ *
+ * Custody is deliberately minimal:
+ *   - cookies are pulled only while a gated track is starting,
+ *   - injected into an IN-MEMORY partition (never the persistent one, never
+ *     disk), used for that watch page, then wiped,
+ *   - the whole channel is gated behind a pairing token, so no unpaired local
+ *     process can ask for cookies.
+ * There is no way to narrow the key below "the Google session" - YouTube issues
+ * no per-video credential - so this is an explicit, opt-in, experimental path.
+ * ========================================================================= */
+let companionServer = null;
+let companionPort = 0;
+let companionPin = '';
+let companionToken = '';
+// One waiter (the extension's long-poll) and one in-flight cookie request.
+let companionWaiter = null;
+let companionPending = null; // { requestId, resolve, timer }
+let companionConnectedAt = 0;
+
+function companionInfo() {
+  return {
+    running: !!companionServer,
+    paired: !!companionToken && companionConnectedAt > 0,
+    code: companionPort ? `${companionPort}-${companionPin}` : '',
+    connected: Date.now() - companionConnectedAt < 70000,
+  };
+}
+
+function companionSafeEqual(a, b) {
+  const ba = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  if (ba.length !== bb.length) return false;
+  try { return crypto.timingSafeEqual(ba, bb); } catch { return false; }
+}
+
+function companionReadBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => { data += c; if (data.length > 1000000) req.destroy(); });
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
+function companionBearerOk(req) {
+  const h = String(req.headers.authorization || '');
+  const m = /^Bearer\s+(.+)$/.exec(h);
+  return !!(companionToken && m && companionSafeEqual(m[1], companionToken));
+}
+
+// Reject calls that arrive with a website's Origin: the extension sends either
+// no Origin or its own chrome-extension:// origin, never http(s).
+function companionOriginOk(req) {
+  const o = req.headers.origin;
+  if (!o) return true;
+  return /^chrome-extension:\/\//.test(o) || /^moz-extension:\/\//.test(o);
+}
+
+function startCompanionServer() {
+  if (companionServer) return Promise.resolve(companionInfo());
+  companionPin = String(crypto.randomInt(100000, 1000000));
+  companionToken = crypto.randomBytes(24).toString('hex');
+  companionServer = http.createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const done = (code, obj) => {
+      res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(obj === undefined ? '' : JSON.stringify(obj));
+    };
+    if (!companionOriginOk(req)) { done(403, { error: 'origin' }); return; }
+
+    if (url.pathname === '/pair' && req.method === 'POST') {
+      const body = await companionReadBody(req);
+      if (!companionSafeEqual(body.pin, companionPin)) { done(403, { error: 'bad pin' }); return; }
+      companionConnectedAt = Date.now();
+      done(200, { token: companionToken });
+      return;
+    }
+    if (url.pathname === '/wait' && req.method === 'GET') {
+      if (!companionBearerOk(req)) { done(401, { error: 'unauthorized' }); return; }
+      companionConnectedAt = Date.now();
+      // Hand off any request already queued; otherwise hold the connection.
+      if (companionPending && !companionPending.dispatched) {
+        companionPending.dispatched = true;
+        done(200, { requestId: companionPending.requestId, videoId: companionPending.videoId });
+        return;
+      }
+      if (companionWaiter) { try { companionWaiter.done(204); } catch {} }
+      const timer = setTimeout(() => {
+        if (companionWaiter && companionWaiter.res === res) { companionWaiter = null; try { done(204); } catch {} }
+      }, 25000);
+      companionWaiter = { res, done: (c, o) => { clearTimeout(timer); done(c, o); } };
+      return;
+    }
+    if (url.pathname === '/cookies' && req.method === 'POST') {
+      if (!companionBearerOk(req)) { done(401, { error: 'unauthorized' }); return; }
+      const body = await companionReadBody(req);
+      if (companionPending && companionPending.requestId === body.requestId) {
+        const p = companionPending;
+        companionPending = null;
+        clearTimeout(p.timer);
+        p.resolve(Array.isArray(body.cookies) ? body.cookies : []);
+      }
+      done(200, { ok: true });
+      return;
+    }
+    done(404, { error: 'not found' });
+  });
+  return new Promise((resolve, reject) => {
+    companionServer.once('error', reject);
+    companionServer.listen(0, '127.0.0.1', () => {
+      companionPort = companionServer.address().port;
+      resolve(companionInfo());
+    });
+  });
+}
+
+// Ask the paired extension for the current YouTube cookies. Resolves null if no
+// extension answers in time, so the caller can fall back to the browser.
+function requestCookiesFromCompanion(videoId) {
+  if (!companionServer || !companionToken) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const requestId = crypto.randomBytes(8).toString('hex');
+    const timer = setTimeout(() => {
+      if (companionPending && companionPending.requestId === requestId) companionPending = null;
+      resolve(null);
+    }, 8000);
+    companionPending = { requestId, videoId, resolve: (v) => resolve(v), timer, dispatched: false };
+    // If the extension is already long-polling, wake it now.
+    if (companionWaiter) {
+      const w = companionWaiter;
+      companionWaiter = null;
+      companionPending.dispatched = true;
+      try { w.done(200, { requestId, videoId }); } catch { companionPending.dispatched = false; }
+    }
+  });
+}
+
+/* --- ephemeral gated view -------------------------------------------------
+ * A second in-deck view on an IN-MEMORY partition (no persist: prefix, so
+ * nothing lands on disk). Cookies are injected right before the watch page
+ * loads and wiped as soon as the deck leaves the track. */
+const GATED_PARTITION = 'ytdeck-gated-ephemeral';
+let gatedView = null;
+let gatedIdleTimer = null;
+
+function gatedSession() {
+  const sess = session.fromPartition(GATED_PARTITION);
+  try { sess.setUserAgent(CHROME_UA); } catch {}
+  return sess;
+}
+
+async function clearGatedCookies() {
+  try {
+    const sess = gatedSession();
+    const jar = await sess.cookies.get({});
+    await Promise.all(jar.map((c) => {
+      const url = `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path || '/'}`;
+      return sess.cookies.remove(url, c.name).catch(() => {});
+    }));
+    await sess.clearStorageData().catch(() => {});
+  } catch {}
+}
+
+async function injectGatedCookies(cookies) {
+  const sess = gatedSession();
+  for (const c of cookies) {
+    const host = String(c.domain || '').replace(/^\./, '');
+    if (!host) continue;
+    const url = `https://${host}${c.path && c.path.startsWith('/') ? c.path : '/'}`;
+    try {
+      await sess.cookies.set({
+        url,
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path || '/',
+        secure: c.secure !== false,
+        httpOnly: !!c.httpOnly,
+        sameSite: c.sameSite || 'no_restriction',
+        expirationDate: c.expirationDate,
+      });
+    } catch { /* individual cookie failures are non-fatal */ }
+  }
+}
+
+function destroyGatedView() {
+  clearTimeout(gatedIdleTimer);
+  if (!gatedView) return;
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(gatedView); } catch {}
+  try { gatedView.webContents.close(); } catch {}
+  gatedView = null;
+  clearGatedCookies();
+}
+
+function ensureGatedView() {
+  if (gatedView) return gatedView;
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  gatedView = new WebContentsView({
+    webPreferences: {
+      partition: GATED_PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  gatedView.webContents.setUserAgent(CHROME_UA);
+  gatedView.setBorderRadius?.(10);
+  mainWindow.contentView.addChildView(gatedView);
+  if (ytViewBounds) { try { gatedView.setBounds({ x: Math.max(0, Math.round(ytViewBounds.x)), y: Math.max(0, Math.round(ytViewBounds.y)), width: Math.max(1, Math.round(ytViewBounds.width)), height: Math.max(1, Math.round(ytViewBounds.height)) }); } catch {} }
+  gatedView.webContents.on('console-message', (event, level, message) => {
+    if (typeof message !== 'string' || !message.startsWith('DECKEVT')) return;
+    try {
+      const payload = JSON.parse(message.slice(7));
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-view-event', payload);
+    } catch {}
+  });
+  gatedView.webContents.on('did-finish-load', () => {
+    gatedView?.webContents.insertCSS(YT_VIEW_CSS).catch(() => {});
+    gatedView?.webContents.executeJavaScript(YT_VIEW_BRIDGE).catch(() => {});
+  });
+  gatedView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  return gatedView;
+}
+
+ipcMain.handle('companion:info', () => companionInfo());
+
+// Opens the folder holding the browser extension, so loading it unpacked is a
+// drag-and-drop rather than a hunt through the install directory.
+ipcMain.handle('companion:revealExtension', () => {
+  const dir = app.isPackaged
+    ? path.join(process.resourcesPath, 'companion-extension')
+    : path.join(__dirname, '..', 'companion-extension');
+  try { shell.openPath(dir); return dir; } catch (err) { return ''; }
+});
+
+ipcMain.handle('yt:playGated', async (_event, videoId) => {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false, message: 'invalid video id' };
+  const cookies = await requestCookiesFromCompanion(videoId);
+  if (!cookies || !cookies.length) return { ok: false, message: 'no-companion' };
+  const hasAuth = cookies.some((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID');
+  if (!hasAuth) return { ok: false, message: 'not-signed-in' };
+  await clearGatedCookies();
+  await injectGatedCookies(cookies);
+  const view = ensureGatedView();
+  if (!view) return { ok: false, message: 'view unavailable' };
+  clearTimeout(gatedIdleTimer);
+  // Park the ordinary (persistent) view so only one is visible at a time.
+  parkYtView();
+  try {
+    await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
+  } catch (err) {
+    const message = String(err && err.message);
+    if (!message.includes('ERR_ABORTED')) { appendAppBarLog('Gated view load failed', message); return { ok: false, message }; }
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('yt:gatedCommand', async (_event, command, value) => {
+  if (!gatedView) return false;
+  try {
+    return await gatedView.webContents.executeJavaScript(`window.__deckCmd && window.__deckCmd(${JSON.stringify(command)}, ${JSON.stringify(value ?? null)})`);
+  } catch { return false; }
+});
+
+ipcMain.handle('yt:gatedBounds', (_event, rect) => {
+  if (gatedView && rect && Number.isFinite(rect.width)) {
+    try { gatedView.setBounds({ x: Math.max(0, Math.round(rect.x)), y: Math.max(0, Math.round(rect.y)), width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height)) }); } catch {}
+  }
+  return true;
+});
+
+ipcMain.handle('yt:gatedStop', () => {
+  destroyGatedView();
+  return true;
+});
 
 // The interactive cookie sign-in that used to live here is gone on purpose:
 // Google blocks credential entry in app-embedded windows, and defeating that

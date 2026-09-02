@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "YT Deck Player Companion",
+  "version": "1.0.0",
+  "description": "Hands your already-signed-in YouTube session to YT Deck Player just-in-time, so age-restricted tracks play inside the deck. Nothing is stored by the app.",
+  "permissions": ["cookies", "storage", "alarms"],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://*.google.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "YT Deck Player Companion",
+    "default_popup": "popup.html"
+  }
+}

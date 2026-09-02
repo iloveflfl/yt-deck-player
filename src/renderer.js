@@ -150,14 +150,26 @@ const I18N = {
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
     agTitle: '연령 제한 곡 처리',
-    agHelp: '연령 제한 곡은 유튜브 정책상 어떤 앱 내장 플레이어에서도 재생되지 않습니다. 이미 로그인·연령 인증된 내 브라우저로 넘기거나, 조용히 건너뛸 수 있습니다.',
+    agHelp: '연령 제한 곡은 유튜브 정책상 임베드로는 재생되지 않습니다. 컴패니언 확장을 연결하면 이미 로그인·연령 인증된 내 세션으로 덱 안에서 그대로 이어 재생합니다. 아니면 브라우저로 넘기거나 건너뛸 수 있습니다.',
+    agIndeck: '덱에서 바로 재생 (확장 필요)',
     agBrowser: '내 브라우저에서 재생',
     agSkip: '조용히 건너뛰기',
+    agIndeckBadge: '연령 · 덱 재생',
+    agCompanionTitle: '컴패니언 확장 연결',
+    agCompanionHelp: '확장이 내 유튜브 쿠키를 곡 재생 시점에만 앱에 건네줍니다. 앱은 그 쿠키를 저장하지 않고, 재생이 끝나면 즉시 지웁니다. 아래 코드를 확장에 붙여넣어 한 번만 연결하세요.',
+    agCompanionCode: '연결 코드',
+    agCompanionPaired: '● 확장 연결됨 — 연령 제한 곡이 덱에서 재생됩니다',
+    agCompanionWaiting: '○ 확장 대기 중 — 확장에 코드를 붙여넣으세요',
+    agCompanionSteps: '1) companion-extension 폴더를 chrome://extensions → 개발자 모드 → 압축해제된 확장 프로그램 로드 로 설치 · 2) 크롬에서 유튜브에 로그인(연령 인증된 계정) · 3) 확장 아이콘을 눌러 위 코드를 붙여넣고 페어링',
+    agExperimental: '실험적',
+    agCopy: '코드 복사',
+    agOpenFolder: '확장 폴더 열기',
+    agHowTo: '설치 방법',
     agKnown: '지금까지 확인된 연령 제한 곡',
     agUnit: '곡',
     agReset: '기록 지우기',
     agBadge: '연령',
-    agBadgeTitle: '연령 제한 - 브라우저에서 재생됩니다',
+    agBadgeTitle: '연령 제한 곡',
     tbOnlyGated: '연령 제한만',
     chTitle: '유튜브 채널에서 가져오기',
     chHelp: '로그인도, 설정도 필요 없습니다. 내 채널 주소만 붙여넣으면 공개 재생목록을 그대로 불러옵니다.',
@@ -334,14 +346,26 @@ const I18N = {
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
     agTitle: 'Age-restricted tracks',
-    agHelp: 'YouTube policy blocks age-restricted videos in every in-app player. They can be handed to your own browser, where you are already signed in and verified, or skipped quietly.',
+    agHelp: 'YouTube policy blocks age-restricted videos from embedding. Pair the companion extension and they play right in the deck using your own signed-in, verified session. Otherwise they can be handed to your browser or skipped.',
+    agIndeck: 'Play in the deck (needs the extension)',
     agBrowser: 'Play in my browser',
     agSkip: 'Skip quietly',
+    agIndeckBadge: '18+ · in deck',
+    agCompanionTitle: 'Companion extension',
+    agCompanionHelp: 'The extension hands your YouTube cookies to the app only at the moment a track plays. The app never stores them and wipes them as soon as the track ends. Paste the code below into the extension once to connect.',
+    agCompanionCode: 'Pairing code',
+    agCompanionPaired: '● Extension connected — age-restricted tracks play in the deck',
+    agCompanionWaiting: '○ Waiting for the extension — paste the code into it',
+    agCompanionSteps: '1) Load the companion-extension folder via chrome://extensions → Developer mode → Load unpacked · 2) Sign in to YouTube in Chrome (an age-verified account) · 3) Click the extension icon, paste the code above, and pair',
+    agExperimental: 'experimental',
+    agCopy: 'Copy code',
+    agOpenFolder: 'Open extension folder',
+    agHowTo: 'How to install',
     agKnown: 'Age-restricted tracks found so far',
     agUnit: 'tracks',
     agReset: 'Clear the list',
     agBadge: '18+',
-    agBadgeTitle: 'Age-restricted - plays in your browser',
+    agBadgeTitle: 'Age-restricted track',
     tbOnlyGated: 'Age-restricted only',
     chTitle: 'Import from a YouTube channel',
     chHelp: 'No sign-in, no setup. Paste your channel address and its public playlists come straight in.',
@@ -2103,7 +2127,7 @@ function animateProgressRewindThen(callback) {
 }
 
 function applyPlaybackRate() {
-  if (ytMode) { window.deckAPI?.ytCommand?.('rate', clampSpeed(state.playback.playbackRate || 1)); return; }
+  if (ytMode) { ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1)); return; }
   if (!ready || !player?.setPlaybackRate) return;
   const rate = clampSpeed(state.playback.playbackRate || 1);
   try {
@@ -2243,7 +2267,7 @@ function progressKnobFlow() {
 
 function playOrPause() {
   leaveBrowserMode();
-  if (ytMode) { window.deckAPI?.ytCommand?.('toggle'); return; }
+  if (ytMode) { ytSendCommand('toggle'); return; }
   if (!ready) return;
   const stateCode = player.getPlayerState?.();
   if (stateCode === YT.PlayerState.PLAYING) {
@@ -2423,7 +2447,14 @@ function playItem(item) {
   setStatus('LOAD');
 
   if (item.type === 'track' && isGated(item)) {
-    if (!handleGatedTrack(item)) return;
+    // With the companion set up, an age-restricted track plays inside the deck
+    // and continues the queue like any other. Otherwise it falls to the
+    // browser / skip choice.
+    if (state.settings.gatedPolicy === 'indeck' && companionState.paired) {
+      startYouTubeMode(item, { gated: true });
+    } else if (!handleGatedTrack(item)) {
+      return;
+    }
     autoSkipCount = 0;
     return;
   }
@@ -3508,6 +3539,17 @@ function isRestricted(item) {
 /* ---------------------------------------------------------- Google OAuth UI */
 let oauthState = { configured: false, connected: false, email: '' };
 
+// Whether a companion browser extension is paired and able to supply the
+// signed-in cookies that let age-restricted tracks play inside the deck.
+let companionState = { running: false, paired: false, code: '', connected: false };
+
+async function refreshCompanion() {
+  try {
+    companionState = (await window.deckAPI?.companionInfo?.()) || companionState;
+  } catch { /* leave the last known state */ }
+  return companionState;
+}
+
 async function refreshOauth() {
   try {
     oauthState = (await window.deckAPI?.oauthStatus?.()) || { configured: false, connected: false };
@@ -3522,8 +3564,9 @@ function accountFlow() {
   const connected = !!oauthState.connected;
   const configured = !!oauthState.configured;
   const savedChannel = state.settings.channelUrl || '';
-  const gatedPolicy = state.settings.gatedPolicy === 'skip' ? 'skip' : 'browser';
+  const gatedPolicy = ['skip', 'indeck', 'browser'].includes(state.settings.gatedPolicy) ? state.settings.gatedPolicy : 'browser';
   const gatedCount = (state.settings.gatedIds || []).length;
+  const companionOn = (p) => (p === gatedPolicy ? ' on' : '');
   showModal(t('ytMyPlaylists'), [
     '<div class="settings-form account-form">',
     // The default path: no account, no setup, just a channel address.
@@ -3542,8 +3585,23 @@ function accountFlow() {
     '  <section class="settings-field">',
     '    <div class="field-copy"><strong>' + escapeHtml(t('agTitle')) + '</strong><span>' + escapeHtml(t('agHelp')) + '</span></div>',
     '    <div class="ag-choice">',
-    '      <button id="agBrowser" class="mini-action' + (gatedPolicy === 'skip' ? '' : ' on') + '" type="button">' + escapeHtml(t('agBrowser')) + '</button>',
-    '      <button id="agSkip" class="mini-action' + (gatedPolicy === 'skip' ? ' on' : '') + '" type="button">' + escapeHtml(t('agSkip')) + '</button>',
+    '      <button id="agIndeck" class="mini-action' + companionOn('indeck') + '" type="button">' + escapeHtml(t('agIndeck')) + '</button>',
+    '      <button id="agBrowser" class="mini-action' + companionOn('browser') + '" type="button">' + escapeHtml(t('agBrowser')) + '</button>',
+    '      <button id="agSkip" class="mini-action' + companionOn('skip') + '" type="button">' + escapeHtml(t('agSkip')) + '</button>',
+    '    </div>',
+    // Pairing panel for the in-deck path: no cookies are stored; the extension
+    // hands them over just-in-time for each age-restricted track.
+    '    <div id="agCompanion" class="oa-panel' + (gatedPolicy === 'indeck' ? '' : ' hidden') + '">',
+    '      <div class="field-copy"><strong>' + escapeHtml(t('agCompanionTitle')) + ' · ' + escapeHtml(t('agExperimental')) + '</strong><span>' + escapeHtml(t('agCompanionHelp')) + '</span></div>',
+    '      <div class="account-actions" style="align-items:center">',
+    '        <span class="tc-status">' + escapeHtml(t('agCompanionCode')) + ':</span>',
+    '        <code id="agCode" class="pair-code">' + escapeHtml(companionState.code || '…') + '</code>',
+    '        <button id="agCodeCopy" class="mini-action" type="button">' + escapeHtml(t('agCopy')) + '</button>',
+    '        <button id="agOpenFolder" class="mini-action" type="button">' + escapeHtml(t('agOpenFolder')) + '</button>',
+    '        <button id="agSteps" class="mini-action" type="button">' + escapeHtml(t('agHowTo')) + '</button>',
+    '      </div>',
+    '      <span id="agStatus" class="tc-status">' + escapeHtml(companionState.paired ? t('agCompanionPaired') : t('agCompanionWaiting')) + '</span>',
+    '      <span id="agStepsText" class="tc-status hidden">' + escapeHtml(t('agCompanionSteps')) + '</span>',
     '    </div>',
     '    <span class="tc-status">' + escapeHtml(t('agKnown')) + ': ' + gatedCount + ' ' + escapeHtml(t('agUnit')) + '</span>',
     gatedCount ? '    <div class="account-actions"><button id="agReset" class="mini-action" type="button">' + escapeHtml(t('agReset')) + '</button></div>' : '',
@@ -3579,15 +3637,31 @@ function accountFlow() {
   const setGatedPolicy = (value) => {
     state.settings.gatedPolicy = value;
     saveState();
-    document.querySelector('#agBrowser')?.classList.toggle('on', value !== 'skip');
-    document.querySelector('#agSkip')?.classList.toggle('on', value === 'skip');
+    ['indeck', 'browser', 'skip'].forEach((p) => document.querySelector('#ag' + p.charAt(0).toUpperCase() + p.slice(1))?.classList.toggle('on', p === value));
+    document.querySelector('#agCompanion')?.classList.toggle('hidden', value !== 'indeck');
   };
+  document.querySelector('#agIndeck')?.addEventListener('click', () => setGatedPolicy('indeck'));
   document.querySelector('#agBrowser')?.addEventListener('click', () => setGatedPolicy('browser'));
   document.querySelector('#agSkip')?.addEventListener('click', () => setGatedPolicy('skip'));
+  document.querySelector('#agSteps')?.addEventListener('click', () => document.querySelector('#agStepsText')?.classList.toggle('hidden'));
+  document.querySelector('#agCodeCopy')?.addEventListener('click', () => {
+    try { navigator.clipboard?.writeText(companionState.code || ''); } catch {}
+  });
+  document.querySelector('#agOpenFolder')?.addEventListener('click', () => {
+    window.deckAPI?.revealCompanionExtension?.();
+  });
   document.querySelector('#agReset')?.addEventListener('click', () => {
     state.settings.gatedIds = [];
     saveState();
     accountFlow();
+  });
+  // The pairing state changes out-of-band (the extension connects on its own),
+  // so pull a fresh reading when the card opens and reflect it live.
+  refreshCompanion().then(() => {
+    const code = document.querySelector('#agCode');
+    if (code && companionState.code) code.textContent = companionState.code;
+    const status = document.querySelector('#agStatus');
+    if (status) status.textContent = companionState.paired ? t('agCompanionPaired') : t('agCompanionWaiting');
   });
 
   document.querySelector('#chWhere')?.addEventListener('click', () => {
@@ -3835,32 +3909,55 @@ function scheduleYtBounds() {
   ytBoundsTimer = window.setTimeout(pushYtBounds, 60);
 }
 
-async function startYouTubeMode(item) {
+// Transport commands (play/pause/volume/rate) go to whichever in-deck view is
+// live: the persistent one for embed-disabled tracks, or the ephemeral
+// signed-in one for age-restricted tracks.
+function ytSendCommand(command, value) {
+  if (ytMode?.gated) window.deckAPI?.ytGatedCommand?.(command, value);
+  else window.deckAPI?.ytCommand?.(command, value);
+}
+
+// `opts.gated` routes an age-restricted track through the ephemeral signed-in
+// view (cookies fetched from the companion just-in-time). Everything after the
+// load - progress, pause, end-of-track hand-off - is shared with the ordinary
+// in-deck view, so a gated track continues the queue like any other.
+async function startYouTubeMode(item, opts = {}) {
   if (!item || !item.videoId) return false;
-  ytMode = { videoId: item.videoId, item, startedAt: Date.now(), ready: false };
+  const gated = !!(opts && opts.gated);
+  ytMode = { videoId: item.videoId, item, startedAt: Date.now(), ready: false, gated };
   document.body.classList.add('yt-mode');
   els.previewFallback.classList.add('hidden');
   try { player?.stopVideo?.(); } catch {}
   setStatus('YT');
-  setSubtitle(t('ytRestrictedBadge'), { sticky: true });
+  setSubtitle(t(gated ? 'agIndeckBadge' : 'ytRestrictedBadge'), { sticky: true });
   // Give the layout one frame so the panel rect is final before the view lands.
   await new Promise((resolve) => window.requestAnimationFrame(resolve));
   pushYtBounds();
-  const res = await window.deckAPI?.ytPlay?.(item.videoId);
+  const res = gated
+    ? await window.deckAPI?.ytPlayGated?.(item.videoId)
+    : await window.deckAPI?.ytPlay?.(item.videoId);
   if (!res || !res.ok) {
     stopYouTubeMode();
+    if (gated) {
+      // The companion did not answer, or its session no longer passes the age
+      // gate. Never lose the track: fall back to the browser / skip choice.
+      markGated(item.videoId);
+      handleGatedTrack(item);
+    }
     return false;
   }
-  window.setTimeout(() => { if (ytMode) window.deckAPI?.ytCommand?.('volume', state.playback.volume); }, 1800);
+  window.setTimeout(() => { if (ytMode) ytSendCommand('volume', state.playback.volume); }, 1800);
   return true;
 }
 
 function stopYouTubeMode() {
   if (!ytMode) return;
+  const gated = ytMode.gated;
   ytMode = null;
   document.body.classList.remove('yt-mode');
   clearTimeout(ytBoundsTimer);
-  window.deckAPI?.ytStop?.();
+  if (gated) window.deckAPI?.ytGatedStop?.();
+  else window.deckAPI?.ytStop?.();
 }
 
 function handleYtEvent(payload) {
@@ -3969,7 +4066,7 @@ function wireEvents() {
   els.volumeSlider.addEventListener('input', () => {
     state.playback.volume = Number(els.volumeSlider.value);
     if (ready) player.setVolume(state.playback.volume);
-    if (ytMode) window.deckAPI?.ytCommand?.('volume', state.playback.volume);
+    if (ytMode) ytSendCommand('volume', state.playback.volume);
     saveState();
   });
 
@@ -4154,6 +4251,10 @@ async function boot() {
   wireEvents();
   startClock();
   refreshOauth();
+  refreshCompanion();
+  // The pairing can come and go while the deck runs, so keep the cached state
+  // reasonably fresh for the play-time routing decision.
+  window.setInterval(refreshCompanion, 15000);
   seedDemoIfEmpty();
   setTrackTitleText(els.trackTitle.textContent);
   commitOnBoardChanges('boot');
