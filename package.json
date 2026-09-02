@@ -1,6 +1,6 @@
 {
   "name": "yt-deck-player",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Responsive frameless YouTube tabletop audio deck v3.0 with a searchable virtualised track browser, indexed play pools, 19 themes plus custom themes, edge docking with AppBar work-area reservation, and a clock/sleep-timer/silent-alarm time cluster.",
   "main": "src/main.js",
   "author": "YT Deck Player v2.3",
@@ -44,9 +44,6 @@
     },
     "asarUnpack": [
       "src/appbar-helper.ps1"
-    ],
-    "extraResources": [
-      "companion-extension/**/*"
     ]
   }
 }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, screen, globalShortcut, session, net, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, screen, globalShortcut, session, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -30,85 +30,12 @@ let displayMetricsTimer = null;
 let ytView = null;
 let ytViewBounds = null;
 let ytIdleTimer = null;
-// Everything Google-account related lives in its own persistent partition, so
-// the sign-in survives restarts and never mixes with the deck's own storage.
-const YT_PARTITION = 'persist:ytdeck-google';
+// YouTube reads and the in-deck view share one partition, kept separate from
+// the deck's own storage. It holds only ordinary browsing state (consent,
+// visitor id); the app never signs in to any account.
+const YT_PARTITION = 'persist:ytdeck-view';
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
-function ytSession() {
-  const sess = session.fromPartition(YT_PARTITION);
-  // Google refuses to sign in from anything that looks like an embedded
-  // framework, so this partition always presents a plain Chrome UA.
-  try { sess.setUserAgent(CHROME_UA); } catch {}
-  return sess;
-}
-
-// A YouTube session is 'signed in' when the auth cookies the site itself uses
-// are present. SAPISID is the one that actually gates personalised responses.
-async function ytSignedInInfo() {
-  try {
-    const cookies = await ytSession().cookies.get({ domain: '.youtube.com' });
-    const google = await ytSession().cookies.get({ domain: '.google.com' });
-    const all = [...cookies, ...google];
-    const names = new Set(all.map((c) => c.name));
-    const signedIn = names.has('SAPISID') || names.has('__Secure-3PAPISID');
-    return { signedIn, cookieCount: all.length };
-  } catch (err) {
-    return { signedIn: false, cookieCount: 0, error: err.message || String(err) };
-  }
-}
-
-// YouTube's own web client signs authenticated InnerTube calls with a hash of
-// the SAPISID cookie; without it the cookies alone are ignored and private
-// playlists come back empty.
-async function ytAuthHeaders(origin = 'https://www.youtube.com') {
-  try {
-    const jar = await ytSession().cookies.get({});
-    const pick = (name) => (jar.find((c) => c.name === name) || {}).value;
-    const sapisid = pick('SAPISID') || pick('__Secure-3PAPISID');
-    if (!sapisid) return {};
-    const ts = Math.floor(Date.now() / 1000);
-    const digest = crypto.createHash('sha1').update(`${ts} ${sapisid} ${origin}`).digest('hex');
-    return {
-      Authorization: `SAPISIDHASH ${ts}_${digest}`,
-      'X-Origin': origin,
-      'X-Goog-AuthUser': '0',
-    };
-  } catch {
-    return {};
-  }
-}
-
-// Request through the signed-in partition so cookies ride along. Falls back to
-// an anonymous fetch when the account session is not available.
-function ytRequest(url, { method = 'GET', headers = {}, body = null } = {}) {
-  return new Promise((resolve, reject) => {
-    let request;
-    try {
-      request = net.request({ url, method, session: ytSession(), useSessionCookies: true, redirect: 'follow' });
-    } catch (err) {
-      reject(err);
-      return;
-    }
-    for (const [key, value] of Object.entries(headers)) {
-      if (value != null) request.setHeader(key, String(value));
-    }
-    const chunks = [];
-    request.on('response', (response) => {
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8');
-        if (response.statusCode >= 400) reject(new Error(`YouTube HTTP ${response.statusCode}`));
-        else resolve(text);
-      });
-      response.on('error', reject);
-    });
-    request.on('error', reject);
-    request.on('abort', () => reject(new Error('request aborted')));
-    if (body) request.write(body);
-    request.end();
-  });
-}
 
 function appBarLogPath() {
   try {
@@ -137,6 +64,24 @@ function documentsStorePath() {
 // an AppBar before that and tearing it down a second later raced the helper:
 // the teardown could land while registration was still in flight, leaving a
 // reserved strip that the app no longer believed in (an untracked ghost).
+// Older builds had a Google sign-in and a companion extension. Those are gone;
+// remove anything they left on disk so no stale account artifact survives an
+// upgrade. Best-effort and bounded to paths this app created.
+function removeLegacyAccountArtifacts() {
+  const targets = [
+    path.join(documentsStorePath().dir, 'google-oauth.json'),
+    path.join(app.getPath('userData'), 'companion.json'),
+    path.join(app.getPath('userData'), 'Partitions', 'ytdeck-google'),
+  ];
+  for (const target of targets) {
+    try {
+      if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+    } catch (err) {
+      appendAppBarLog('Legacy artifact cleanup skipped', { target, error: err.message || String(err) });
+    }
+  }
+}
+
 function readPersistedReserveSpace() {
   const { file } = documentsStorePath();
   for (const candidate of [file, `${file}.bak`]) {
@@ -1065,12 +1010,12 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+  removeLegacyAccountArtifacts();
   removeStaleAppBarFromPreviousRun();
   reserveSpaceEnabled = readPersistedReserveSpace();
   appendAppBarLog('Startup reserve-space preference', { reserveSpaceEnabled });
   await createWindow();
   createTray();
-  startCompanionServer().catch((err) => appendAppBarLog('Companion server failed to start', err.message || String(err)));
 
   globalShortcut.register('CommandOrControl+Alt+D', () => {
     if (mainWindow) mainWindow.webContents.toggleDevTools();
@@ -1125,8 +1070,6 @@ app.on('will-quit', () => {
   try { unregisterAppBar(); } catch {}
   try { tray?.destroy(); } catch {}
   if (localServer) localServer.close();
-  try { destroyGatedView(); } catch {}
-  if (companionServer) companionServer.close();
 });
 
 ipcMain.handle('deck:getBounds', () => getDeckBounds());
@@ -1305,18 +1248,6 @@ function ensureYtView() {
 ipcMain.handle('yt:setBounds', (_event, rect) => {
   ytViewBounds = rect && Number.isFinite(rect.width) ? rect : null;
   applyYtViewBounds();
-  // The gated view shares the same panel rect, so one bounds channel serves
-  // both and neither strands off-screen on a dock or resize.
-  if (gatedView && ytViewBounds) {
-    try {
-      gatedView.setBounds({
-        x: Math.max(0, Math.round(ytViewBounds.x)),
-        y: Math.max(0, Math.round(ytViewBounds.y)),
-        width: Math.max(1, Math.round(ytViewBounds.width)),
-        height: Math.max(1, Math.round(ytViewBounds.height)),
-      });
-    } catch {}
-  }
   return true;
 });
 
@@ -1354,618 +1285,6 @@ ipcMain.handle('yt:stop', () => {
   return true;
 });
 
-ipcMain.handle('yt:status', async () => ytSignedInInfo());
-
-/* =========================================================================
- * Companion loopback server + ephemeral gated playback
- * -------------------------------------------------------------------------
- * Age-restricted tracks only play on youtube.com in a signed-in session. This
- * app never stores that session: a browser extension the user installs holds
- * their YouTube cookies, and hands them over just-in-time for one playback.
- *
- * Custody is deliberately minimal:
- *   - cookies are pulled only while a gated track is starting,
- *   - injected into an IN-MEMORY partition (never the persistent one, never
- *     disk), used for that watch page, then wiped,
- *   - the whole channel is gated behind a pairing token, so no unpaired local
- *     process can ask for cookies.
- * There is no way to narrow the key below "the Google session" - YouTube issues
- * no per-video credential - so this is an explicit, opt-in, experimental path.
- * ========================================================================= */
-let companionServer = null;
-let companionPort = 0;
-let companionPin = '';
-let companionToken = '';
-// One waiter (the extension's long-poll) and one in-flight cookie request.
-let companionWaiter = null;
-let companionPending = null; // { requestId, resolve, timer }
-let companionConnectedAt = 0;
-
-function companionInfo() {
-  return {
-    running: !!companionServer,
-    paired: !!companionToken && companionConnectedAt > 0,
-    code: companionPort ? `${companionPort}-${companionPin}` : '',
-    connected: Date.now() - companionConnectedAt < 70000,
-  };
-}
-
-function companionSafeEqual(a, b) {
-  const ba = Buffer.from(String(a || ''));
-  const bb = Buffer.from(String(b || ''));
-  if (ba.length !== bb.length) return false;
-  try { return crypto.timingSafeEqual(ba, bb); } catch { return false; }
-}
-
-function companionReadBody(req) {
-  return new Promise((resolve) => {
-    let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1000000) req.destroy(); });
-    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
-    req.on('error', () => resolve({}));
-  });
-}
-
-function companionBearerOk(req) {
-  const h = String(req.headers.authorization || '');
-  const m = /^Bearer\s+(.+)$/.exec(h);
-  return !!(companionToken && m && companionSafeEqual(m[1], companionToken));
-}
-
-// Reject calls that arrive with a website's Origin: the extension sends either
-// no Origin or its own chrome-extension:// origin, never http(s).
-function companionOriginOk(req) {
-  const o = req.headers.origin;
-  if (!o) return true;
-  return /^chrome-extension:\/\//.test(o) || /^moz-extension:\/\//.test(o);
-}
-
-// The pairing secret (token + pin + preferred port) is remembered across
-// launches, so pairing the extension is a one-time step - not something the
-// user redoes every time the deck starts. This is only the loopback handshake
-// secret; no YouTube cookies are ever written here.
-function companionCredsPath() {
-  return path.join(app.getPath('userData'), 'companion.json');
-}
-function loadCompanionCreds() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(companionCredsPath(), 'utf8'));
-    if (raw && typeof raw.token === 'string' && typeof raw.pin === 'string') return raw;
-  } catch {}
-  return null;
-}
-function saveCompanionCreds() {
-  try {
-    fs.writeFileSync(companionCredsPath(), JSON.stringify({ token: companionToken, pin: companionPin, port: companionPort }), { mode: 0o600 });
-  } catch (err) {
-    appendAppBarLog('Companion creds save failed', err.message || String(err));
-  }
-}
-
-function startCompanionServer() {
-  if (companionServer) return Promise.resolve(companionInfo());
-  const saved = loadCompanionCreds();
-  companionPin = saved ? saved.pin : String(crypto.randomInt(100000, 1000000));
-  companionToken = saved ? saved.token : crypto.randomBytes(24).toString('hex');
-  const preferredPort = saved && Number.isInteger(saved.port) ? saved.port : 0;
-  companionServer = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://127.0.0.1');
-    const done = (code, obj) => {
-      res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(obj === undefined ? '' : JSON.stringify(obj));
-    };
-    if (!companionOriginOk(req)) { done(403, { error: 'origin' }); return; }
-
-    if (url.pathname === '/pair' && req.method === 'POST') {
-      const body = await companionReadBody(req);
-      if (!companionSafeEqual(body.pin, companionPin)) { done(403, { error: 'bad pin' }); return; }
-      companionConnectedAt = Date.now();
-      done(200, { token: companionToken });
-      return;
-    }
-    if (url.pathname === '/wait' && req.method === 'GET') {
-      if (!companionBearerOk(req)) { done(401, { error: 'unauthorized' }); return; }
-      companionConnectedAt = Date.now();
-      // Hand off any request already queued; otherwise hold the connection.
-      if (companionPending && !companionPending.dispatched) {
-        companionPending.dispatched = true;
-        done(200, { requestId: companionPending.requestId, videoId: companionPending.videoId });
-        return;
-      }
-      if (companionWaiter) { try { companionWaiter.done(204); } catch {} }
-      const timer = setTimeout(() => {
-        if (companionWaiter && companionWaiter.res === res) { companionWaiter = null; try { done(204); } catch {} }
-      }, 25000);
-      companionWaiter = { res, done: (c, o) => { clearTimeout(timer); done(c, o); } };
-      return;
-    }
-    if (url.pathname === '/cookies' && req.method === 'POST') {
-      if (!companionBearerOk(req)) { done(401, { error: 'unauthorized' }); return; }
-      const body = await companionReadBody(req);
-      if (companionPending && companionPending.requestId === body.requestId) {
-        const p = companionPending;
-        companionPending = null;
-        clearTimeout(p.timer);
-        p.resolve(Array.isArray(body.cookies) ? body.cookies : []);
-      }
-      done(200, { ok: true });
-      return;
-    }
-    done(404, { error: 'not found' });
-  });
-  return new Promise((resolve) => {
-    // Reuse the remembered port so an already-paired extension reconnects
-    // without the user re-pairing; if it is taken, fall back to a free one
-    // (the user re-pairs only in that rare case).
-    const bind = (port, allowFallback) => {
-      companionServer.removeAllListeners('error');
-      companionServer.once('error', (err) => {
-        if (allowFallback && (err.code === 'EADDRINUSE' || err.code === 'EACCES')) { bind(0, false); return; }
-        appendAppBarLog('Companion server bind failed', err.message || String(err));
-        companionServer = null;
-        resolve(companionInfo());
-      });
-      companionServer.listen(port, '127.0.0.1', () => {
-        companionPort = companionServer.address().port;
-        saveCompanionCreds();
-        resolve(companionInfo());
-      });
-    };
-    bind(preferredPort, true);
-  });
-}
-
-// Ask the paired extension for the current YouTube cookies. Resolves null if no
-// extension answers in time, so the caller can fall back to the browser.
-function requestCookiesFromCompanion(videoId) {
-  if (!companionServer || !companionToken) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const requestId = crypto.randomBytes(8).toString('hex');
-    const timer = setTimeout(() => {
-      if (companionPending && companionPending.requestId === requestId) companionPending = null;
-      resolve(null);
-    }, 8000);
-    companionPending = { requestId, videoId, resolve: (v) => resolve(v), timer, dispatched: false };
-    // If the extension is already long-polling, wake it now.
-    if (companionWaiter) {
-      const w = companionWaiter;
-      companionWaiter = null;
-      companionPending.dispatched = true;
-      try { w.done(200, { requestId, videoId }); } catch { companionPending.dispatched = false; }
-    }
-  });
-}
-
-/* --- ephemeral gated view -------------------------------------------------
- * A second in-deck view on an IN-MEMORY partition (no persist: prefix, so
- * nothing lands on disk). Cookies are injected right before the watch page
- * loads and wiped as soon as the deck leaves the track. */
-const GATED_PARTITION = 'ytdeck-gated-ephemeral';
-let gatedView = null;
-let gatedIdleTimer = null;
-
-function gatedSession() {
-  const sess = session.fromPartition(GATED_PARTITION);
-  try { sess.setUserAgent(CHROME_UA); } catch {}
-  return sess;
-}
-
-async function clearGatedCookies() {
-  try {
-    const sess = gatedSession();
-    const jar = await sess.cookies.get({});
-    await Promise.all(jar.map((c) => {
-      const url = `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path || '/'}`;
-      return sess.cookies.remove(url, c.name).catch(() => {});
-    }));
-    await sess.clearStorageData().catch(() => {});
-  } catch {}
-}
-
-async function injectGatedCookies(cookies) {
-  const sess = gatedSession();
-  for (const c of cookies) {
-    const host = String(c.domain || '').replace(/^\./, '');
-    if (!host) continue;
-    const url = `https://${host}${c.path && c.path.startsWith('/') ? c.path : '/'}`;
-    try {
-      await sess.cookies.set({
-        url,
-        name: c.name,
-        value: c.value,
-        domain: c.domain,
-        path: c.path || '/',
-        secure: c.secure !== false,
-        httpOnly: !!c.httpOnly,
-        sameSite: c.sameSite || 'no_restriction',
-        expirationDate: c.expirationDate,
-      });
-    } catch { /* individual cookie failures are non-fatal */ }
-  }
-}
-
-function destroyGatedView() {
-  clearTimeout(gatedIdleTimer);
-  if (!gatedView) return;
-  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(gatedView); } catch {}
-  try { gatedView.webContents.close(); } catch {}
-  gatedView = null;
-  clearGatedCookies();
-}
-
-function ensureGatedView() {
-  if (gatedView) return gatedView;
-  if (!mainWindow || mainWindow.isDestroyed()) return null;
-  gatedView = new WebContentsView({
-    webPreferences: {
-      partition: GATED_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      autoplayPolicy: 'no-user-gesture-required',
-    },
-  });
-  gatedView.webContents.setUserAgent(CHROME_UA);
-  gatedView.setBorderRadius?.(10);
-  mainWindow.contentView.addChildView(gatedView);
-  if (ytViewBounds) { try { gatedView.setBounds({ x: Math.max(0, Math.round(ytViewBounds.x)), y: Math.max(0, Math.round(ytViewBounds.y)), width: Math.max(1, Math.round(ytViewBounds.width)), height: Math.max(1, Math.round(ytViewBounds.height)) }); } catch {} }
-  gatedView.webContents.on('console-message', (event, level, message) => {
-    if (typeof message !== 'string' || !message.startsWith('DECKEVT')) return;
-    try {
-      const payload = JSON.parse(message.slice(7));
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-view-event', payload);
-    } catch {}
-  });
-  gatedView.webContents.on('did-finish-load', () => {
-    gatedView?.webContents.insertCSS(YT_VIEW_CSS).catch(() => {});
-    gatedView?.webContents.executeJavaScript(YT_VIEW_BRIDGE).catch(() => {});
-  });
-  gatedView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  return gatedView;
-}
-
-ipcMain.handle('companion:info', () => companionInfo());
-
-// Opens the folder holding the browser extension, so loading it unpacked is a
-// drag-and-drop rather than a hunt through the install directory.
-ipcMain.handle('companion:revealExtension', () => {
-  const dir = app.isPackaged
-    ? path.join(process.resourcesPath, 'companion-extension')
-    : path.join(__dirname, '..', 'companion-extension');
-  try { shell.openPath(dir); return dir; } catch (err) { return ''; }
-});
-
-ipcMain.handle('yt:playGated', async (_event, videoId) => {
-  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false, message: 'invalid video id' };
-  const cookies = await requestCookiesFromCompanion(videoId);
-  if (!cookies || !cookies.length) return { ok: false, message: 'no-companion' };
-  const hasAuth = cookies.some((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID');
-  if (!hasAuth) return { ok: false, message: 'not-signed-in' };
-  await clearGatedCookies();
-  await injectGatedCookies(cookies);
-  const view = ensureGatedView();
-  if (!view) return { ok: false, message: 'view unavailable' };
-  clearTimeout(gatedIdleTimer);
-  // Park the ordinary (persistent) view so only one is visible at a time.
-  parkYtView();
-  try {
-    await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
-  } catch (err) {
-    const message = String(err && err.message);
-    if (!message.includes('ERR_ABORTED')) { appendAppBarLog('Gated view load failed', message); return { ok: false, message }; }
-  }
-  return { ok: true };
-});
-
-ipcMain.handle('yt:gatedCommand', async (_event, command, value) => {
-  if (!gatedView) return false;
-  try {
-    return await gatedView.webContents.executeJavaScript(`window.__deckCmd && window.__deckCmd(${JSON.stringify(command)}, ${JSON.stringify(value ?? null)})`);
-  } catch { return false; }
-});
-
-ipcMain.handle('yt:gatedBounds', (_event, rect) => {
-  if (gatedView && rect && Number.isFinite(rect.width)) {
-    try { gatedView.setBounds({ x: Math.max(0, Math.round(rect.x)), y: Math.max(0, Math.round(rect.y)), width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height)) }); } catch {}
-  }
-  return true;
-});
-
-ipcMain.handle('yt:gatedStop', () => {
-  destroyGatedView();
-  return true;
-});
-
-// The interactive cookie sign-in that used to live here is gone on purpose:
-// Google blocks credential entry in app-embedded windows, and defeating that
-// check is exactly what a phishing app would do. Account access now goes
-// through OAuth in the user's own browser instead (see below).
-
-// Lists the playlists that belong to the signed-in account (including private
-// ones). Returns ids only - the track lists are loaded through the existing
-// per-playlist import so both entry points share one code path.
-/* =========================================================================
- * Google OAuth (system browser, PKCE, loopback redirect)
- * -------------------------------------------------------------------------
- * The sanctioned desktop flow, and the same one Slack/Spotify/VS Code use:
- * the app never renders a password field. It opens the user's real browser,
- * where they pick an account they are already signed into, and receives an
- * authorisation code back on a loopback port. Only tokens ever reach the app.
- * ========================================================================= */
-const OAUTH_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly';
-let oauthServer = null;
-let oauthPending = null;
-
-function oauthStorePath() {
-  return path.join(documentsStorePath().dir, 'google-oauth.json');
-}
-
-function readOauthStore() {
-  try {
-    return JSON.parse(fs.readFileSync(oauthStorePath(), 'utf8')) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeOauthStore(data) {
-  try {
-    const { dir } = documentsStorePath();
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(oauthStorePath(), JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    appendAppBarLog('OAuth store write failed', err.message || String(err));
-  }
-}
-
-function base64url(buffer) {
-  return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function closeOauthServer() {
-  if (!oauthServer) return;
-  try { oauthServer.close(); } catch {}
-  oauthServer = null;
-}
-
-// Serves exactly one redirect and then shuts down.
-function startLoopbackServer() {
-  return new Promise((resolve, reject) => {
-    closeOauthServer();
-    const server = http.createServer((req, res) => {
-      let url;
-      try { url = new URL(req.url, 'http://127.0.0.1'); } catch { url = null; }
-      if (!url || url.pathname !== '/callback') {
-        res.writeHead(404).end('Not found');
-        return;
-      }
-      const code = url.searchParams.get('code');
-      const error = url.searchParams.get('error');
-      const state = url.searchParams.get('state');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`<!doctype html><meta charset="utf-8"><title>YT Deck Player</title>
-        <body style="margin:0;display:grid;place-items:center;height:100vh;font-family:system-ui,'Segoe UI',sans-serif;background:#10141f;color:#eef3ff">
-        <div style="text-align:center">
-          <div style="font-size:44px">${error ? '&#9888;' : '&#10003;'}</div>
-          <h2 style="font-weight:600">${error ? 'Sign-in cancelled' : 'YT Deck Player is connected'}</h2>
-          <p style="color:#8f9bb3">${error ? 'You can close this tab and try again.' : 'You can close this tab and go back to the deck.'}</p>
-        </div></body>`);
-      if (oauthPending) {
-        const pending = oauthPending;
-        oauthPending = null;
-        setTimeout(closeOauthServer, 300);
-        if (error) pending.reject(new Error(error));
-        else if (!code) pending.reject(new Error('no authorisation code returned'));
-        else if (state !== pending.state) pending.reject(new Error('state mismatch'));
-        else pending.resolve(code);
-      }
-    });
-    server.on('error', reject);
-    // Port 0 lets the OS pick; Google allows any loopback port for desktop apps.
-    server.listen(0, '127.0.0.1', () => {
-      oauthServer = server;
-      resolve(server.address().port);
-    });
-  });
-}
-
-async function oauthTokenRequest(params) {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(params).toString(),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error_description || data.error || `token HTTP ${res.status}`);
-  return data;
-}
-
-function oauthStatus() {
-  const store = readOauthStore();
-  return {
-    configured: Boolean(store.clientId),
-    connected: Boolean(store.refreshToken),
-    email: store.email || '',
-    expiresAt: store.expiresAt || 0,
-  };
-}
-
-async function oauthAccessToken() {
-  const store = readOauthStore();
-  if (!store.refreshToken) throw new Error('not connected');
-  if (store.accessToken && store.expiresAt && Date.now() < store.expiresAt - 60000) return store.accessToken;
-  const data = await oauthTokenRequest({
-    client_id: store.clientId,
-    ...(store.clientSecret ? { client_secret: store.clientSecret } : {}),
-    refresh_token: store.refreshToken,
-    grant_type: 'refresh_token',
-  });
-  store.accessToken = data.access_token;
-  store.expiresAt = Date.now() + (Number(data.expires_in || 3500) * 1000);
-  writeOauthStore(store);
-  return store.accessToken;
-}
-
-async function oauthApi(url) {
-  const token = await oauthAccessToken();
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const reason = data?.error?.message || `HTTP ${res.status}`;
-    throw new Error(reason);
-  }
-  return data;
-}
-
-async function oauthConnect() {
-  const store = readOauthStore();
-  if (!store.clientId) throw new Error('missing client id');
-  const port = await startLoopbackServer();
-  const redirectUri = `http://127.0.0.1:${port}/callback`;
-  const verifier = base64url(crypto.randomBytes(48));
-  const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
-  const state = base64url(crypto.randomBytes(16));
-
-  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
-    client_id: store.clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: OAUTH_SCOPE,
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
-    state,
-    access_type: 'offline',
-    prompt: 'consent select_account',
-  }).toString();
-
-  const code = await new Promise((resolve, reject) => {
-    oauthPending = { resolve, reject, state };
-    shell.openExternal(authUrl).catch(reject);
-    setTimeout(() => {
-      if (oauthPending) {
-        oauthPending = null;
-        closeOauthServer();
-        reject(new Error('timed out waiting for the browser'));
-      }
-    }, 300000);
-  });
-
-  const tokens = await oauthTokenRequest({
-    client_id: store.clientId,
-    ...(store.clientSecret ? { client_secret: store.clientSecret } : {}),
-    code,
-    code_verifier: verifier,
-    grant_type: 'authorization_code',
-    redirect_uri: redirectUri,
-  });
-  store.refreshToken = tokens.refresh_token || store.refreshToken;
-  store.accessToken = tokens.access_token;
-  store.expiresAt = Date.now() + (Number(tokens.expires_in || 3500) * 1000);
-  writeOauthStore(store);
-
-  // Friendly label for the account card; failure here must not break sign-in.
-  try {
-    const channel = await oauthApi('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true');
-    store.email = channel?.items?.[0]?.snippet?.title || '';
-    writeOauthStore(store);
-  } catch {}
-  return oauthStatus();
-}
-
-ipcMain.handle('yt:oauthStatus', () => oauthStatus());
-
-ipcMain.handle('yt:oauthConfigure', (_event, clientId, clientSecret) => {
-  const store = readOauthStore();
-  store.clientId = String(clientId || '').trim();
-  store.clientSecret = String(clientSecret || '').trim();
-  // Changing the client invalidates any token issued for the previous one.
-  delete store.refreshToken;
-  delete store.accessToken;
-  delete store.expiresAt;
-  delete store.email;
-  writeOauthStore(store);
-  return oauthStatus();
-});
-
-ipcMain.handle('yt:oauthConnect', async () => {
-  try {
-    return { ok: true, status: await oauthConnect() };
-  } catch (err) {
-    closeOauthServer();
-    oauthPending = null;
-    return { ok: false, message: err.message || String(err) };
-  }
-});
-
-ipcMain.handle('yt:oauthDisconnect', () => {
-  const store = readOauthStore();
-  writeOauthStore({ clientId: store.clientId, clientSecret: store.clientSecret });
-  return oauthStatus();
-});
-
-// The account's own playlists, through the official API.
-ipcMain.handle('yt:apiPlaylists', async () => {
-  const playlists = [];
-  let pageToken = '';
-  do {
-    const url = 'https://www.googleapis.com/youtube/v3/playlists?' + new URLSearchParams({
-      part: 'snippet,contentDetails',
-      mine: 'true',
-      maxResults: '50',
-      ...(pageToken ? { pageToken } : {}),
-    }).toString();
-    const data = await oauthApi(url);
-    for (const item of data.items || []) {
-      const thumbs = item.snippet?.thumbnails || {};
-      const best = thumbs.medium || thumbs.high || thumbs.default || {};
-      playlists.push({
-        playlistId: item.id,
-        title: item.snippet?.title || item.id,
-        count: Number(item.contentDetails?.itemCount || 0),
-        thumbnail: best.url || '',
-      });
-    }
-    pageToken = data.nextPageToken || '';
-  } while (pageToken);
-  return { connected: true, playlists };
-});
-
-// Track list for one playlist, paginated. Deleted/private entries are dropped
-// the same way the no-key importer drops them.
-ipcMain.handle('yt:apiPlaylistItems', async (_event, playlistId) => {
-  if (!/^[A-Za-z0-9_-]+$/.test(String(playlistId || ''))) throw new Error('invalid playlist id');
-  const tracks = [];
-  let pageToken = '';
-  let guard = 0;
-  do {
-    guard += 1;
-    const url = 'https://www.googleapis.com/youtube/v3/playlistItems?' + new URLSearchParams({
-      part: 'snippet,contentDetails,status',
-      playlistId,
-      maxResults: '50',
-      ...(pageToken ? { pageToken } : {}),
-    }).toString();
-    const data = await oauthApi(url);
-    for (const item of data.items || []) {
-      const videoId = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
-      const title = item.snippet?.title || '';
-      if (!videoId) continue;
-      if (/^(Deleted video|Private video)$/i.test(title)) continue;
-      const thumbs = item.snippet?.thumbnails || {};
-      const best = thumbs.medium || thumbs.high || thumbs.default || {};
-      tracks.push({
-        videoId,
-        title: title || videoId,
-        channel: item.snippet?.videoOwnerChannelTitle || 'YouTube',
-        thumbnail: best.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        duration: 0,
-      });
-    }
-    pageToken = data.nextPageToken || '';
-  } while (pageToken && guard < 120);
-  return { tracks, complete: !pageToken };
-});
-
 // Age-restricted tracks can only play in a real browser session, so hand them
 // to the user's own browser where they are already signed in and verified.
 ipcMain.handle('yt:openExternal', async (_event, videoId) => {
@@ -1979,8 +1298,8 @@ ipcMain.handle('yt:openExternal', async (_event, videoId) => {
  * -------------------------------------------------------------------------
  * The zero-setup way to pull in "my playlists": a channel's public playlists
  * are readable without signing in at all, so a distributed build needs no
- * OAuth client, no consent screen and no per-user setup. Private playlists
- * still need the optional OAuth path.
+ * account, no consent screen and no per-user setup. Playlists the owner has
+ * marked private are not visible this way, by design.
  * ========================================================================= */
 function channelPlaylistsUrl(input) {
   const raw = String(input || '').trim();
@@ -2392,29 +1711,7 @@ async function fetchInnertubeContinuation(cfg, continuation) {
   const body = { context, continuation };
   const clientNameHeader = String(cfg.INNERTUBE_CONTEXT_CLIENT_NAME || cfg.INNERTUBE_CLIENT_NAME || '1');
   const clientVersionHeader = String(cfg.INNERTUBE_CONTEXT_CLIENT_VERSION || cfg.INNERTUBE_CLIENT_VERSION || context.client.clientVersion || '2.20240601.00.00');
-  const auth = await ytSignedInInfo();
   const browseUrl = `https://www.youtube.com/youtubei/v1/browse?prettyPrint=false&key=${encodeURIComponent(key)}`;
-  if (auth.signedIn) {
-    try {
-      const text = await ytRequest(browseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': '*/*',
-          'User-Agent': CHROME_UA,
-          'Origin': 'https://www.youtube.com',
-          'Referer': 'https://www.youtube.com/',
-          'X-YouTube-Client-Name': clientNameHeader,
-          'X-YouTube-Client-Version': clientVersionHeader,
-          ...(await ytAuthHeaders()),
-        },
-        body: JSON.stringify(body),
-      });
-      return JSON.parse(text);
-    } catch (err) {
-      console.warn('Signed-in continuation failed, falling back:', err.message || err);
-    }
-  }
   const res = await fetch(browseUrl, {
     method: 'POST',
     headers: {
@@ -2445,17 +1742,6 @@ async function fetchText(url, extraHeaders = {}) {
     'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+667; PREF=hl=en&gl=US',
     ...extraHeaders,
   };
-  // When the user is signed in, go through the account partition so private
-  // and personalised pages resolve; otherwise stay anonymous as before.
-  const auth = await ytSignedInInfo();
-  if (auth.signedIn) {
-    const { Cookie, ...rest } = headers;
-    try {
-      return await ytRequest(url, { headers: { ...rest, ...(await ytAuthHeaders()) } });
-    } catch (err) {
-      console.warn('Signed-in fetch failed, falling back to anonymous:', err.message || err);
-    }
-  }
   const res = await fetch(url, { headers, redirect: 'follow' });
   if (!res.ok) throw new Error(`YouTube page HTTP ${res.status}`);
   return res.text();

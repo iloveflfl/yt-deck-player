@@ -27,18 +27,12 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 - **내 재생목록 가져오기 (로그인·설정 없음)**: 상단 ☰ 버튼 → 내 채널 주소(`@내채널`)만 붙여넣으면 공개 재생목록이 전부 목록으로 뜨고, 원하는 것만 골라 한 번에 들어옵니다.
   계정 연결도, API 키도, 클라이언트 ID도 필요 없습니다. 채널 주소는 기억되어 다음부터는 버튼 한 번이면 됩니다.
   - 이미 있는 재생목록은 중복 없이 갱신되고, 이름만 같은 남의 목록은 `이름 (YouTube)`로 따로 들어옵니다. 직접 추가한 곡은 갱신해도 남습니다.
-- **구글 계정 연결 (선택)**: *비공개로 저장한* 재생목록까지 필요할 때만 쓰는 고급 항목입니다. 카드 안에 접혀 있으며,
-  Google Cloud에서 발급한 데스크톱 앱 OAuth 클라이언트 ID가 필요합니다(앱 안에 6단계 안내 있음). 연결하면 기본 브라우저에서 계정을 고르는 방식이라 비밀번호는 앱을 거치지 않습니다.
 - **재생 불가 곡 처리**: 소유자가 임베드를 막은 곡은 미리보기 패널 자리에 유튜브 페이지를 띄워 그대로 재생하고, 끝나면 덱으로 자동 복귀합니다.
-  연령 제한 곡은 임베드로는 재생이 불가능합니다(2020년부터 제3자 임베드 전면 차단, 유튜브 정책). 재생하려면 로그인 + 연령 인증된 세션이 반드시 필요합니다.
-  처리 방식을 직접 고를 수 있습니다(☰ 카드 → 연령 제한 곡 처리):
-  - **덱에서 바로 재생** *(실험적, 컴패니언 확장 필요)* — 연령 제한 곡도 다른 곡처럼 덱 안에서 이어 재생합니다. 아래 "컴패니언 확장" 참고.
+  연령 제한 곡은 임베드로는 재생이 불가능합니다(2020년부터 제3자 임베드 전면 차단, 유튜브 정책). 재생하려면 로그인 + 연령 인증된 세션이 필요한데,
+  이 앱은 구글 로그인을 일절 하지 않습니다. 대신 처리 방식을 직접 고를 수 있습니다(☰ 카드 → 연령 제한 곡 처리):
   - **내 브라우저에서 재생** (기본) — 이미 로그인·연령 인증된 기본 브라우저로 넘깁니다. 한 번 확인된 곡은 기억해 다음부터 바로 넘어갑니다.
   - **조용히 건너뛰기** — 브라우저를 띄우지 않고 다음 곡으로 넘어갑니다. 건너뛴 곡도 기록은 남습니다.
   어느 쪽이든 곡이 조용히 사라지지 않습니다. 트랙 목록에서 `연령` 배지로 표시되고, **연령 제한만** 토글로 모아 볼 수 있습니다.
-- **컴패니언 확장 (선택, 실험적)**: 연령 제한 곡을 *덱 안에서* 이어 들으려면 함께 들어 있는 `companion-extension` 폴더를 크롬/엣지에 설치합니다.
-  ☰ 카드에서 "덱에서 바로 재생"을 켜면 **확장 폴더 열기** 버튼과 연결 코드가 나옵니다 → `chrome://extensions` → 개발자 모드 → 압축해제된 확장 로드 → 확장 아이콘에 코드를 붙여넣어 1회 페어링.
-  이후 확장은 곡 재생 시점에만 내 유튜브 쿠키를 앱에 건네주고, **앱은 그 쿠키를 저장하지 않으며**(메모리 전용 파티션, 재생 후 즉시 소거), 전달은 페어링 토큰으로 보호되는 로컬(127.0.0.1) 통신입니다. 크롬에서 연령 인증된 계정으로 유튜브에 로그인되어 있어야 합니다.
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
@@ -87,16 +81,11 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 - **Import my playlists (no sign-in, no setup)**: the ☰ button takes a channel address (`@yourchannel`), lists every public playlist on it, and imports the ones you tick.
   No account, no API key, no client ID. The address is remembered, so later it is one click.
   - Playlists already on the board refresh in place instead of duplicating; someone else's playlist that merely shares a name comes in separately as `name (YouTube)`. Hand-added tracks survive a refresh.
-- **Google account (optional)**: only needed to reach playlists you saved as *private*. It is folded away inside the same card and requires a desktop-app OAuth client ID from Google Cloud (six steps, shown in the app). Connecting opens your default browser to pick an account, so the password never goes through the app.
 - **Unplayable tracks**: videos whose owner disabled embedding play on youtube.com inside the preview panel and hand control back to the deck when they end.
-  Age-restricted videos can't play through an embed (third-party embedding was blocked in 2020); playback requires a signed-in, age-verified session. Choose what happens (☰ card → Age-restricted tracks):
-  - **Play in the deck** *(experimental, needs the companion extension)* — age-restricted tracks continue in the deck like any other. See "Companion extension" below.
+  Age-restricted videos can't play through an embed (third-party embedding was blocked in 2020); playback requires a signed-in, age-verified session, and this app never signs in to Google. Choose what happens instead (☰ card → Age-restricted tracks):
   - **Play in my browser** (default) — handed to your own browser, where you are already signed in and verified. Once seen, a track goes straight there next time.
   - **Skip quietly** — moves to the next track without opening anything. Skipped tracks are still recorded.
   Either way nothing disappears silently: age-restricted tracks carry an `18+` badge in the track list, with an **Age-restricted only** toggle to collect them.
-- **Companion extension (optional, experimental)**: to hear age-restricted tracks *inside the deck*, load the bundled `companion-extension` folder in Chrome/Edge.
-  Turn on "Play in the deck" in the ☰ card and it shows an **Open extension folder** button and a pairing code → `chrome://extensions` → Developer mode → Load unpacked → click the extension icon and paste the code to pair once.
-  After that the extension hands your YouTube cookies to the app only at the moment a track plays; **the app never stores them** (in-memory partition, wiped after the track), and the exchange is local (127.0.0.1) traffic guarded by the pairing token. You must be signed in to YouTube in Chrome with an age-verified account.
 - **Chip board**: Save YouTube playlist/video links to a library, drag chips onto the board to
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
