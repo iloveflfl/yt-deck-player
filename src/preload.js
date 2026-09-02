@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('deckAPI', {
   importPlaylistNoKey: (playlistId) => ipcRenderer.invoke('youtube:importPlaylistNoKey', playlistId),
   setTrayTooltip: (text) => ipcRenderer.invoke('deck:setTrayTooltip', text),
   channelPlaylists: (input) => ipcRenderer.invoke('yt:channelPlaylists', input),
+  embedInfo: (videoId) => ipcRenderer.invoke('yt:embedInfo', videoId),
   openExternalVideo: (videoId) => ipcRenderer.invoke('yt:openExternal', videoId),
   ytPlay: (videoId) => ipcRenderer.invoke('yt:play', videoId),
   ytCommand: (command, value) => ipcRenderer.invoke('yt:command', command, value),

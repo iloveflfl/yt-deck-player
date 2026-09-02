@@ -263,6 +263,30 @@ function getDeckBounds(mode = dockMode) {
   return mode === 'free' ? safeFreeBounds(getBestDisplay()) : deckBoundsForDisplay(getBestDisplay(), mode);
 }
 
+// setBounds alone moved the frame but sometimes left the page laid out at the
+// previous size - most visibly when leaving a tall side dock, where the deck
+// kept its narrow layout (and hid the preview panel) inside a wide window.
+// Pinning the content size too makes the renderer's viewport follow every time.
+function applyWindowBounds(target) {
+  if (!mainWindow || mainWindow.isDestroyed() || !target) return;
+  mainWindow.setBounds(target);
+  try {
+    const [cw, ch] = mainWindow.getContentSize();
+    if (cw !== target.width || ch !== target.height) {
+      mainWindow.setContentSize(target.width, target.height);
+    }
+  } catch (err) {
+    appendAppBarLog('Content size sync failed', err.message || String(err));
+  }
+}
+
+// The real window rectangle, as opposed to getDeckBounds() which reports the
+// rectangle a dock mode *should* occupy.
+function actualWindowBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  try { return mainWindow.getBounds(); } catch { return null; }
+}
+
 function hwndToString() {
   if (!mainWindow || mainWindow.isDestroyed()) return '';
   const handle = mainWindow.getNativeWindowHandle();
@@ -703,7 +727,7 @@ async function positionWindowForDock(mode, preferCursor = false) {
       : deckBoundsForDisplay(display, mode, reserveSpaceEnabled && process.platform === 'win32');
     if (mode === 'free' || !reserveSpaceEnabled || process.platform !== 'win32') {
       if (appBarRegistered || appBarProcess) unregisterAppBar();
-      mainWindow.setBounds(target);
+      applyWindowBounds(target);
       appBarRegistered = false;
       return mode;
     }
@@ -712,7 +736,7 @@ async function positionWindowForDock(mode, preferCursor = false) {
     // This avoids the visible "jump to make room, then jump back" effect when
     // Windows updates the work area and existing maximized windows resize.
     applyingDockBounds = true;
-    mainWindow.setBounds(target);
+    applyWindowBounds(target);
     ignoreDisplayMetricsUntil = Date.now() + 1800;
 
     const result = await registerAppBarOnce(mode, target);
@@ -724,10 +748,10 @@ async function positionWindowForDock(mode, preferCursor = false) {
       const adjusted = anchorDockRectToDisplay(rectFromAppBarResult(result, target), display);
       appendAppBarLog('AppBar reserve succeeded; applying Electron DIP bounds', { target, adjusted, result });
       ignoreDisplayMetricsUntil = Date.now() + 1800;
-      mainWindow.setBounds(adjusted);
+      applyWindowBounds(adjusted);
       appBarRegistered = true;
     } else {
-      mainWindow.setBounds(target);
+      applyWindowBounds(target);
       appBarRegistered = false;
       appBarSignature = '';
       if (result?.message) appendAppBarLog('AppBar reserve failed', result);
@@ -772,7 +796,7 @@ async function setReserveSpaceEnabled(value) {
     await unregisterAppBarAndWait(2000);
     if (dockMode !== 'free' && mainWindow && !mainWindow.isDestroyed()) {
       applyingDockBounds = true;
-      mainWindow.setBounds(deckBoundsForDisplay(getBestDisplay(false), dockMode));
+      applyWindowBounds(deckBoundsForDisplay(getBestDisplay(false), dockMode));
       setTimeout(() => { applyingDockBounds = false; }, 250);
     }
   } else if (dockMode !== 'free') {
@@ -1072,7 +1096,9 @@ app.on('will-quit', () => {
   if (localServer) localServer.close();
 });
 
-ipcMain.handle('deck:getBounds', () => getDeckBounds());
+// Report where the window actually is, not where the current dock mode says
+// it ought to be - the two can disagree, and reporting the intent hides that.
+ipcMain.handle('deck:getBounds', () => actualWindowBounds() || getDeckBounds());
 ipcMain.handle('deck:getOrigin', () => appOrigin);
 ipcMain.handle('deck:dockBottom', async () => {
   if (!mainWindow) return false;
@@ -1757,6 +1783,44 @@ async function fetchText(url, extraHeaders = {}) {
   const res = await fetch(url, { headers, redirect: 'follow' });
   if (!res.ok) throw new Error(`YouTube page HTTP ${res.status}`);
   return res.text();
+}
+
+// Why a video refused to play in the embedded player, straight from YouTube.
+// The iframe only reports 101/150 for both "the owner disabled embedding" and
+// "this needs a sign-in", and it also reports them for transient failures - so
+// the deck asks here instead of guessing and condemning the video for good.
+ipcMain.handle('yt:embedInfo', async (_event, videoId) => {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(String(videoId || ''))) return { ok: false };
+  try {
+    const html = await fetchText(`https://www.youtube.com/watch?v=${videoId}&hl=en&gl=US`);
+    const pr = extractYtInitialPlayerResponse(html);
+    if (!pr) return { ok: false };
+    const ps = pr.playabilityStatus || {};
+    const blob = JSON.stringify(ps);
+    return {
+      ok: true,
+      status: ps.status || '',
+      playableInEmbed: ps.playableInEmbed !== false,
+      ageGated: ps.status === 'LOGIN_REQUIRED' && /age|confirm your age|inappropriate/i.test(blob),
+      unplayable: ps.status === 'UNPLAYABLE' || ps.status === 'ERROR',
+    };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+function extractYtInitialPlayerResponse(html) {
+  for (const marker of ['var ytInitialPlayerResponse = ', 'ytInitialPlayerResponse = ']) {
+    const idx = html.indexOf(marker);
+    if (idx < 0) continue;
+    const start = html.indexOf('{', idx);
+    if (start < 0) continue;
+    const end = findJsonEnd(html, start);
+    if (end > start) {
+      try { return JSON.parse(html.slice(start, end + 1)); } catch { /* try next */ }
+    }
+  }
+  return null;
 }
 
 function extractYtInitialData(html) {

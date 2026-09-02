@@ -147,6 +147,7 @@ const I18N = {
     ytImportBusy: '가져오는 중…',
     ytRestrictedBadge: '임베드 차단 곡 · 유튜브 화면으로 재생 중',
     ytRestrictedOpening: '이 곡은 임베드가 막혀 있어 유튜브 화면으로 전환합니다…',
+    ytEmbedRetry: '재생을 다시 시도하는 중…',
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
     agTitle: '연령 제한 곡 처리',
@@ -311,6 +312,7 @@ const I18N = {
     ytImportBusy: 'Importing…',
     ytRestrictedBadge: 'Embedding disabled · playing on the YouTube page',
     ytRestrictedOpening: 'Embedding is disabled for this track — switching to the YouTube page…',
+    ytEmbedRetry: 'Retrying playback…',
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
     agTitle: 'Age-restricted tracks',
@@ -440,6 +442,7 @@ const defaultState = {
     channelUrl: '',
     gatedPolicy: 'browser',
     restrictedIds: [],
+    restrictedIdsVerified: false,
     // Videos that need a signed-in browser session (age gate).
     gatedIds: [],
     alarmTime: '',
@@ -555,16 +558,56 @@ function onPlayerStateChange(event) {
   }
 }
 
+// The iframe reports 101/150 for three very different things: the owner really
+// did disable embedding, the video needs a sign-in, or the load simply failed
+// this once. Treating all three as "never embed this again" quietly pushed
+// perfectly embeddable videos onto the heavy watch-page path for good, so ask
+// YouTube which it is and only give up on the embed when it is truly refused.
+const embedRetryCounts = new Map();
+
+async function handleEmbedRefusal(item) {
+  const videoId = item.videoId;
+  const info = await window.deckAPI?.embedInfo?.(videoId).catch(() => null);
+
+  if (info && info.ok && info.ageGated) {
+    markGated(videoId);
+    if (!currentItem || itemKey(currentItem) !== itemKey(item)) return;
+    handleGatedTrack(item);
+    return;
+  }
+
+  if (embedRetryCounts.size > 500) embedRetryCounts.clear();
+  const tries = (embedRetryCounts.get(videoId) || 0) + 1;
+  embedRetryCounts.set(videoId, tries);
+
+  // One retry, then believe it. YouTube's playableInEmbed flag is not a usable
+  // predictor here: label-owned music videos report true and still refuse with
+  // 150 from a third-party origin, so actually retrying is the only honest
+  // test - and it still absorbs the transient failures that used to condemn a
+  // perfectly embeddable video to the watch page for good.
+  if (tries <= 1 && !(info && info.ok && info.unplayable)) {
+    if (!currentItem || itemKey(currentItem) !== itemKey(item)) return;
+    setStatus('RETRY');
+    setSubtitle(t('ytEmbedRetry'));
+    window.setTimeout(() => {
+      if (!currentItem || itemKey(currentItem) !== itemKey(item)) return;
+      try { player.loadVideoById({ videoId, startSeconds: 0, suggestedQuality: 'small' }); } catch {}
+    }, 400);
+    return;
+  }
+
+  // Genuinely not embeddable: remember it and use the in-deck watch page.
+  markRestricted(videoId);
+  if (!currentItem || itemKey(currentItem) !== itemKey(item)) return;
+  setStatus('YT');
+  setSubtitle(t('ytRestrictedOpening'));
+  startYouTubeMode(item);
+}
+
 function onPlayerError(event) {
   const code = event?.data;
-  // 101/150 is YouTube refusing to embed (age-restricted or embedding off).
-  // Those are playable on youtube.com itself, so hand them to the deck view
-  // rather than dropping the track.
   if ((code === 101 || code === 150) && currentItem?.videoId) {
-    markRestricted(currentItem.videoId);
-    setStatus('YT');
-    setSubtitle(t('ytRestrictedOpening'));
-    startYouTubeMode(currentItem);
+    handleEmbedRefusal(currentItem);
     return;
   }
   setStatus(`SKIP ${code}`);
@@ -1038,6 +1081,13 @@ function normalizeState() {
   // in-deck age-gate mode, say). Fold anything unrecognised back to a default
   // so the UI and the playback path never disagree about what is set.
   if (state.settings.gatedPolicy !== 'skip') state.settings.gatedPolicy = 'browser';
+  // Entries recorded before playback classification was verified are unreliable:
+  // a single transient embed failure was stored as a permanent verdict. Drop
+  // them once so the verified path rebuilds only the truly non-embeddable ones.
+  if (!state.settings.restrictedIdsVerified) {
+    state.settings.restrictedIds = [];
+    state.settings.restrictedIdsVerified = true;
+  }
   cleanupDetachedVolatileChips(false);
 }
 
