@@ -1126,6 +1126,15 @@ const YT_VIEW_CSS = `
     display: none !important;
   }
   ytd-page-manager, #page-manager { margin: 0 !important; }
+  /* Site furniture that would otherwise cover the cropped panel. This is
+     chrome only - the ad player (.video-ads/.ytp-ad-*) is left alone. */
+  ytd-popup-container, tp-yt-paper-dialog, tp-yt-iron-overlay-backdrop,
+  yt-mealbar-promo-renderer, ytd-mealbar-promo-renderer, ytmusic-mealbar-promo-renderer,
+  ytd-butter-bar-renderer, ytd-banner-promo-renderer, ytd-statement-banner-renderer,
+  #consent-bump, ytd-consent-bump-v2-lightbox, yt-upsell-dialog-renderer,
+  ytd-enforcement-message-view-model, tp-yt-paper-toast, #scrim {
+    display: none !important;
+  }
   ytd-watch-flexy #columns, ytd-watch-flexy #primary, ytd-watch-flexy #primary-inner {
     margin: 0 !important; padding: 0 !important; max-width: 100vw !important; width: 100vw !important;
   }
@@ -1224,7 +1233,7 @@ function ensureYtView() {
     },
   });
   ytView.webContents.setUserAgent(CHROME_UA);
-  ytView.setBorderRadius?.(10);
+  ytView.setBorderRadius?.(Number.isFinite(ytViewBounds?.radius) ? ytViewBounds.radius : 12);
   mainWindow.contentView.addChildView(ytView);
   applyYtViewBounds();
 
@@ -1248,6 +1257,9 @@ function ensureYtView() {
 ipcMain.handle('yt:setBounds', (_event, rect) => {
   ytViewBounds = rect && Number.isFinite(rect.width) ? rect : null;
   applyYtViewBounds();
+  if (ytView && ytViewBounds && Number.isFinite(ytViewBounds.radius)) {
+    try { ytView.setBorderRadius?.(ytViewBounds.radius); } catch {}
+  }
   return true;
 });
 

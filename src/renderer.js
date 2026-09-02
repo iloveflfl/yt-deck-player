@@ -145,8 +145,8 @@ const I18N = {
     ytSelectNone: '선택 해제',
     ytImportDone: '재생목록 가져오기 완료',
     ytImportBusy: '가져오는 중…',
-    ytRestrictedBadge: '연령 제한 · 유튜브에서 재생 중',
-    ytRestrictedOpening: '연령 제한 곡 — 유튜브로 전환 중…',
+    ytRestrictedBadge: '임베드 차단 곡 · 유튜브 화면으로 재생 중',
+    ytRestrictedOpening: '이 곡은 임베드가 막혀 있어 유튜브 화면으로 전환합니다…',
     ytNeedSignIn: '연령 제한 곡입니다. 구글 로그인 후 재생할 수 있습니다.',
     ytTracks: '곡',
     agTitle: '연령 제한 곡 처리',
@@ -309,8 +309,8 @@ const I18N = {
     ytSelectNone: 'Clear selection',
     ytImportDone: 'Playlist import finished',
     ytImportBusy: 'Importing…',
-    ytRestrictedBadge: 'Age-restricted · playing on YouTube',
-    ytRestrictedOpening: 'Age-restricted track — switching to YouTube…',
+    ytRestrictedBadge: 'Embedding disabled · playing on the YouTube page',
+    ytRestrictedOpening: 'Embedding is disabled for this track — switching to the YouTube page…',
     ytNeedSignIn: 'This track is age-restricted. Sign in with Google to play it.',
     ytTracks: 'tracks',
     agTitle: 'Age-restricted tracks',
@@ -2600,8 +2600,20 @@ function deletePlaylist(id) {
   markOnBoardChanged();
 }
 
+// Seeking goes to whichever engine is actually playing: the embedded player,
+// or the in-deck YouTube view via its bridge.
+function seekPlaybackTo(seconds) {
+  const t = Math.max(0, Number(seconds) || 0);
+  if (ytMode) { ytSendCommand('seek', t); return; }
+  try { player?.seekTo?.(t, true); } catch {}
+}
+
 function progressTimeFromClientX(clientX) {
-  const dur = player?.getDuration?.() || smoothProgress.duration || lastProgressSample.duration || currentItem?.duration || 0;
+  // In the in-deck view the iframe player is stopped, so its duration is stale
+  // or zero; the view's own reports are the source of truth there.
+  const dur = ytMode
+    ? (smoothProgress.duration || currentItem?.duration || 0)
+    : (player?.getDuration?.() || smoothProgress.duration || lastProgressSample.duration || currentItem?.duration || 0);
   if (!dur || !els.progressWrap) return null;
   const rect = els.progressWrap.getBoundingClientRect();
   const width = Math.max(1, rect.width);
@@ -2610,12 +2622,11 @@ function progressTimeFromClientX(clientX) {
 }
 
 function seekFromProgress(event) {
-  if (ytMode) return;
   if (performance.now() < suppressProgressClickUntil) return;
-  if (!ready || !player) return;
+  if (!ytMode && (!ready || !player)) return;
   const info = progressTimeFromClientX(event.clientX);
   if (!info) return;
-  player.seekTo(info.time, true);
+  seekPlaybackTo(info.time);
   smoothProgress.time = info.time;
   smoothProgress.duration = info.duration;
   smoothProgress.lastFrameAt = performance.now();
@@ -2623,7 +2634,7 @@ function seekFromProgress(event) {
 }
 
 function updateScrubPreview(event, options = {}) {
-  if (!ready || !player) return;
+  if (!ytMode && (!ready || !player)) return;
   const info = progressTimeFromClientX(event.clientX);
   if (!info) return;
   scrubPreview = { time: info.time, duration: info.duration, lastSeekAt: scrubPreview.lastSeekAt || 0 };
@@ -2634,14 +2645,14 @@ function updateScrubPreview(event, options = {}) {
 
   const now = performance.now();
   if (options.force || now - (scrubPreview.lastSeekAt || 0) > 115) {
-    try { player.seekTo(info.time, true); } catch {}
+    seekPlaybackTo(info.time);
     scrubPreview.lastSeekAt = now;
   }
 }
 
 function beginProgressScrub(event) {
-  if (ytMode) return;
-  if (!ready || !player || event.button !== 0) return;
+  if (event.button !== 0) return;
+  if (!ytMode && (!ready || !player)) return;
   const info = progressTimeFromClientX(event.clientX);
   if (!info) return;
   event.preventDefault();
@@ -2650,7 +2661,10 @@ function beginProgressScrub(event) {
   if (progressRewindRaf) cancelAnimationFrame(progressRewindRaf);
   scrubPointerId = event.pointerId;
   els.progressWrap.classList.add('scrubbing');
-  els.progressWrap.setPointerCapture?.(event.pointerId);
+  // Capture is an optimisation, not a requirement. If it throws (a pointer that
+  // is already gone) the scrub must still start, or the bar would be left
+  // flagged as scrubbing with no seek and would stop updating entirely.
+  try { els.progressWrap.setPointerCapture?.(event.pointerId); } catch {}
   scrubPreview = { time: info.time, duration: info.duration, lastSeekAt: 0 };
   updateScrubPreview(event, { force: true });
 }
@@ -3671,7 +3685,10 @@ function previewRect() {
   if (!el) return null;
   const r = el.getBoundingClientRect();
   if (r.width < 40 || r.height < 30) return null;
-  return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+  // The view is a native surface, so it cannot inherit the panel's rounded
+  // corners from CSS - send the real radius so it can match them itself.
+  const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+  return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height), radius: Math.round(radius) };
 }
 
 function pushYtBounds() {
@@ -3749,16 +3766,27 @@ function handleYtEvent(payload) {
     updatePlayButtonLabel(!payload.paused);
     if (payload.ad) {
       // An ad is its own video element; showing its clock on the deck's bar
-      // would look like the song jumped. Leave the bar alone and say so -
-      // but a paused deck still has to read as paused.
+      // would look like the song jumped. Freeze the bar and say so - but a
+      // paused deck still has to read as paused. Freezing matters now that the
+      // bar glides between reports: without this it would drift through the ad.
+      smoothProgress.playing = false;
+      smoothProgress.lastFrameAt = performance.now();
       setStatus(payload.paused ? 'PAUSE' : 'AD');
       return;
     }
     const duration = Number(payload.duration) || 0;
     const time = Number(payload.time) || 0;
-    if (duration > 0) {
+    if (duration > 0 && !isScrubbingProgress) {
+      // Feed the same smoothing the embedded player uses, so the bar glides
+      // between the view's 500ms reports instead of stepping.
       smoothProgress.time = time;
       smoothProgress.duration = duration;
+      smoothProgress.playing = !payload.paused;
+      smoothProgress.rate = clampSpeed(state.playback.playbackRate || 1);
+      smoothProgress.lastFrameAt = performance.now();
+      smoothProgress.correction = 0;
+      smoothProgress.correctionUntil = 0;
+      lastProgressSample = { time, duration, sampledAt: performance.now(), state: payload.paused ? 2 : 1 };
       paintProgress(time, duration);
     }
     setStatus(payload.paused ? 'PAUSE' : 'YT');
