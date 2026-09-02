@@ -3977,12 +3977,20 @@ function stopYouTubeMode() {
 function handleYtEvent(payload) {
   if (!ytMode || !payload) return;
   if (payload.type === 'blocked') {
-    // YouTube is refusing to play: the age gate, which no embedded session can
-    // pass. The user's own browser can, so the track continues there - unless
-    // the user would rather not be interrupted.
+    // YouTube is refusing to play: the age gate, which a signed-out embedded
+    // session cannot pass.
     const blockedItem = ytMode.item;
+    const wasGated = ytMode.gated;
     markGated(blockedItem?.videoId);
     stopYouTubeMode();
+    // First time we meet an age-gated track, this fires from the signed-out
+    // view. If the companion is set up, retry it there (signed in) rather than
+    // falling out to the browser. `wasGated` guards against a loop: if the
+    // companion view itself was blocked, its cookies did not pass, so fall back.
+    if (!wasGated && state.settings.gatedPolicy === 'indeck' && companionState.connected && blockedItem) {
+      startYouTubeMode(blockedItem, { gated: true });
+      return;
+    }
     handleGatedTrack(blockedItem);
     return;
   }
