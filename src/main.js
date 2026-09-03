@@ -1168,7 +1168,23 @@ const YT_VIEW_CSS = `
     width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important;
     margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
   }
-  video.html5-main-video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; object-fit: contain; }
+  /* contain MUST win here. Without !important YouTube's own object-fit:cover
+     applies, and since the element is forced to the panel size the picture gets
+     cropped - visibly different from the embedded player, which letterboxes. */
+  video.html5-main-video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; object-fit: contain !important; }
+  /* The embedded player runs with controls:0, so the watch page must not paint
+     its own control bar, title, gradients or end cards over the video. Ad UI
+     (.video-ads / .ytp-ad-*) is deliberately NOT hidden: ads keep behaving
+     exactly as they do in the embedded player, including the skip button. */
+  .ytp-chrome-top, .ytp-chrome-bottom, .ytp-chrome-controls,
+  .ytp-gradient-top, .ytp-gradient-bottom, .ytp-watermark,
+  .ytp-ce-element, .ytp-endscreen-content, .ytp-pause-overlay,
+  .ytp-show-cards-title, .ytp-title, .iv-branding, .annotation,
+  .ytp-paid-content-overlay, .ytp-muted-autoplay-endscreen-overlay {
+    display: none !important;
+  }
+  /* No hover affordances either - nothing here is meant to be clicked. */
+  .html5-video-player { cursor: default !important; }
 `;
 
 const YT_VIEW_BRIDGE = `(() => {
