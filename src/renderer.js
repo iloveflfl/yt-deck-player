@@ -60,6 +60,13 @@ const I18N = {
     shuffleBag: '셔플 백',
     shuffleChaos: '완전 무작위',
     loop: '반복',
+    adTitle: '광고 처리',
+    adHelp: '유튜브 화면으로 재생할 때 광고·추적 요청을 차단하고, 건너뛸 수 있는 광고는 버튼이 뜨는 즉시 자동으로 넘깁니다. 건너뛰기가 없는 광고는 그대로 재생됩니다.',
+    adOn: '켜기',
+    adOff: '끄기',
+    adBlocked: '차단한 요청',
+    adSkipped: '자동으로 넘긴 광고',
+    adUnit: '건',
     reserveSpace: '공간 예약',
     reserveSpaceTitle: '다른 창이 이 덱 영역을 침범하지 않게 합니다',
     controlSettings: '컨트롤 설정',
@@ -174,6 +181,8 @@ const I18N = {
     ytOpenBrowser: '브라우저에서 재생',
     ytOpenedBrowser: '연령 제한 곡 — 브라우저에서 재생 중입니다',
     ytRestrictedSkip: '연령 제한 곡을 건너뛰었습니다',
+    ytBlockedSkip: '유튜브가 재생을 거부해 건너뛰었습니다',
+    ytStalledSkip: '유튜브 화면이 시작되지 않아 건너뛰었습니다',
     alarmChipTip: '알람 · 클릭: 시간 카드',
     minShort: '분',
   },
@@ -225,6 +234,13 @@ const I18N = {
     shuffleBag: 'Shuffle bag',
     shuffleChaos: 'Chaos',
     loop: 'Loop',
+    adTitle: 'Ad handling',
+    adHelp: 'Blocks ad and tracking requests on the YouTube view, and presses skip the moment the button appears. Ads with no skip button still play through.',
+    adOn: 'On',
+    adOff: 'Off',
+    adBlocked: 'Requests blocked',
+    adSkipped: 'Ads skipped',
+    adUnit: '',
     reserveSpace: 'Reserve space',
     reserveSpaceTitle: 'Keep other maximized windows out of this deck area',
     controlSettings: 'Control settings',
@@ -339,6 +355,8 @@ const I18N = {
     ytOpenBrowser: 'Play in browser',
     ytOpenedBrowser: 'Age-restricted track — playing in your browser',
     ytRestrictedSkip: 'Skipped an age-restricted track',
+    ytBlockedSkip: 'Skipped: YouTube refused to play this one',
+    ytStalledSkip: 'Skipped: the YouTube view never started',
     alarmChipTip: 'Alarm · click: time card',
     minShort: 'min',
   },
@@ -441,6 +459,9 @@ const defaultState = {
     // next time instead of failing into it.
     channelUrl: '',
     gatedPolicy: 'skip',
+    // Drop ad/tracking requests on the YouTube view and press the skip button
+    // as soon as it appears. See the ad handling notes in main.js.
+    blockAds: true,
     restrictedIds: [],
     restrictedIdsVerified: false,
     gatedSkipDefault: false,
@@ -465,6 +486,7 @@ const els = {
   timerChip: $('#timerChip'),
   alarmChip: $('#alarmChip'),
   previewFallback: $('#previewFallback'),
+  ytPoster: $('#ytPoster'),
   trackTitle: $('#trackTitle'),
   trackSub: $('#trackSub'),
   currentTime: $('#currentTime'),
@@ -1082,6 +1104,7 @@ function normalizeState() {
   // in-deck age-gate mode, say). Fold anything unrecognised back to a default
   // so the UI and the playback path never disagree about what is set.
   if (!['skip', 'browser'].includes(state.settings.gatedPolicy)) state.settings.gatedPolicy = 'skip';
+  if (typeof state.settings.blockAds !== 'boolean') state.settings.blockAds = true;
   // Handing an age-restricted track to a full browser window interrupts whatever
   // the user is doing. That is now opt-in rather than the default, and existing
   // installs are moved across once.
@@ -3477,6 +3500,17 @@ function gatedSet() {
   return new Set(state.settings.gatedIds);
 }
 
+// A refusal from the watch page is not automatically an age gate. Region locks,
+// deleted videos, "sign in to confirm you're not a bot" and YouTube objecting to
+// the ad filter all come back through the same channel, and none of them is a
+// property of the track worth remembering forever - recording one would quietly
+// retire a playable song from the deck for good.
+const AGE_GATE_REASON = /(연령|성인\s*인증|sign in to confirm your age|age[-\s]?restricted|inappropriate for some users)/i;
+
+function isAgeGateReason(reason) {
+  return AGE_GATE_REASON.test(String(reason || ''));
+}
+
 function markGated(videoId) {
   if (!videoId) return;
   const list = Array.isArray(state.settings.gatedIds) ? state.settings.gatedIds : [];
@@ -3549,6 +3583,7 @@ function accountFlow() {
   const savedChannel = state.settings.channelUrl || '';
   const gatedPolicy = state.settings.gatedPolicy === 'skip' ? 'skip' : 'browser';
   const gatedCount = (state.settings.gatedIds || []).length;
+  const adOn = state.settings.blockAds !== false;
   showModal(t('ytMyPlaylists'), [
     '<div class="settings-form account-form">',
     // The default path: no account, no setup, just a channel address.
@@ -3573,6 +3608,14 @@ function accountFlow() {
     '    <span class="tc-status">' + escapeHtml(t('agKnown')) + ': ' + gatedCount + ' ' + escapeHtml(t('agUnit')) + '</span>',
     gatedCount ? '    <div class="account-actions"><button id="agReset" class="mini-action" type="button">' + escapeHtml(t('agReset')) + '</button></div>' : '',
     '  </section>',
+    '  <section class="settings-field">',
+    '    <div class="field-copy"><strong>' + escapeHtml(t('adTitle')) + '</strong><span>' + escapeHtml(t('adHelp')) + '</span></div>',
+    '    <div class="ag-choice">',
+    '      <button id="adOn" class="mini-action' + (adOn ? ' on' : '') + '" type="button">' + escapeHtml(t('adOn')) + '</button>',
+    '      <button id="adOff" class="mini-action' + (adOn ? '' : ' on') + '" type="button">' + escapeHtml(t('adOff')) + '</button>',
+    '    </div>',
+    '    <span id="adStats" class="tc-status"></span>',
+    '  </section>',
     '  <div class="form-actions settings-actions">',
     '    <button id="agClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
     '  </div>',
@@ -3587,6 +3630,25 @@ function accountFlow() {
     document.querySelector('#agBrowser')?.classList.toggle('on', value !== 'skip');
     document.querySelector('#agSkip')?.classList.toggle('on', value === 'skip');
   };
+  // Counters come from the main process, which is where both levers live.
+  const paintAdStats = (stats) => {
+    const el = document.querySelector('#adStats');
+    if (!el || !stats) return;
+    const unit = t('adUnit') ? ' ' + t('adUnit') : '';
+    el.textContent = t('adBlocked') + ': ' + (stats.blocked || 0) + unit
+      + '  ·  ' + t('adSkipped') + ': ' + (stats.skipped || 0) + unit;
+  };
+  const setAdHandling = async (enabled) => {
+    state.settings.blockAds = enabled;
+    saveState();
+    document.querySelector('#adOn')?.classList.toggle('on', enabled);
+    document.querySelector('#adOff')?.classList.toggle('on', !enabled);
+    try { paintAdStats(await window.deckAPI?.ytSetAdHandling?.(enabled)); } catch {}
+  };
+  document.querySelector('#adOn')?.addEventListener('click', () => { setAdHandling(true); });
+  document.querySelector('#adOff')?.addEventListener('click', () => { setAdHandling(false); });
+  (async () => { try { paintAdStats(await window.deckAPI?.ytAdStats?.()); } catch {} })();
+
   document.querySelector('#agBrowser')?.addEventListener('click', () => setGatedPolicy('browser'));
   document.querySelector('#agSkip')?.addEventListener('click', () => setGatedPolicy('skip'));
   document.querySelector('#agReset')?.addEventListener('click', () => {
@@ -3768,8 +3830,10 @@ function previewRect() {
 
 function pushYtBounds() {
   if (!ytMode) return;
-  const rect = previewRect();
-  if (rect) window.deckAPI?.ytSetBounds?.(rect);
+  // A null rect is information, not a reason to stay quiet: the narrow and mini
+  // layouts drop the preview panel, and the native view has to go with it or it
+  // keeps painting over whatever took its place.
+  window.deckAPI?.ytSetBounds?.(previewRect());
 }
 
 function scheduleYtBounds() {
@@ -3792,11 +3856,26 @@ async function startYouTubeMode(item) {
   ytMode = { videoId: item.videoId, item, startedAt: Date.now(), ready: false };
   document.body.classList.add('yt-mode');
   els.previewFallback.classList.add('hidden');
+  if (els.ytPoster) {
+    // Scraped thumbnails are not guaranteed to be quote-free, and one stray
+    // quote here would break the whole declaration.
+    const art = String(item.thumbnail || thumbnailForVideo(item.videoId) || '');
+    const safeArt = art.replace(/["'\\()\s]/g, encodeURIComponent);
+    els.ytPoster.style.backgroundImage = safeArt ? `url("${safeArt}")` : 'none';
+  }
   try { player?.stopVideo?.(); } catch {}
   setStatus('YT');
   setSubtitle(t('ytRestrictedBadge'), { sticky: true });
   // Give the layout one frame so the panel rect is final before the view lands.
-  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  // A minimized or hidden deck never paints, so requestAnimationFrame can wait
+  // indefinitely - which used to leave the track stuck on "YT" forever with no
+  // audio. Whichever comes first wins; the bounds are re-pushed on restore.
+  await new Promise((resolve) => {
+    let settled = false;
+    const settle = () => { if (!settled) { settled = true; resolve(); } };
+    window.requestAnimationFrame(settle);
+    window.setTimeout(settle, 120);
+  });
   pushYtBounds();
   const res = await window.deckAPI?.ytPlay?.(item.videoId);
   // A newer playback started while we waited: it owns the view now, so bow out
@@ -3820,6 +3899,18 @@ async function startYouTubeMode(item) {
     ytSendCommand('volume', state.playback.volume);
     ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1));
   }, 1800);
+  // Nothing has been heard back from the view by now: no media element, or a
+  // page that never got as far as building a player. ready flips on the first
+  // report of any kind, including during an ad, so reaching here means the view
+  // is genuinely stuck - and the deck used to sit on the track forever.
+  window.setTimeout(() => {
+    if (!ytMode || ytMode.item !== item || ytMode.ready) return;
+    if (!currentItem || itemKey(currentItem) !== itemKey(item)) return;
+    stopYouTubeMode();
+    setStatus('SKIP');
+    setSubtitle(t('ytStalledSkip'));
+    handlePlaybackErrorSkip();
+  }, 20000);
   return true;
 }
 
@@ -3827,6 +3918,7 @@ function stopYouTubeMode() {
   if (!ytMode) return;
   ytMode = null;
   document.body.classList.remove('yt-mode');
+  if (els.ytPoster) els.ytPoster.style.backgroundImage = 'none';
   clearTimeout(ytBoundsTimer);
   window.deckAPI?.ytStop?.();
 }
@@ -3834,12 +3926,17 @@ function stopYouTubeMode() {
 function handleYtEvent(payload) {
   if (!ytMode || !payload) return;
   if (payload.type === 'blocked') {
-    // YouTube is refusing to play: the age gate, which a signed-out embedded
-    // session cannot pass.
     const blockedItem = ytMode.item;
-    markGated(blockedItem?.videoId);
     stopYouTubeMode();
-    handleGatedTrack(blockedItem);
+    // Only an actual age gate is a permanent verdict; handleGatedTrack records
+    // it. Everything else just fails this attempt.
+    if (isAgeGateReason(payload.reason)) {
+      handleGatedTrack(blockedItem);
+      return;
+    }
+    setStatus('SKIP');
+    setSubtitle(t('ytBlockedSkip'));
+    handlePlaybackErrorSkip();
     return;
   }
   if (payload.type === 'progress') {
@@ -4032,6 +4129,7 @@ function wireEvents() {
   });
 
   window.addEventListener('resize', () => { updateLayoutClass(); scheduleYtBounds(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleYtBounds(); });
   new ResizeObserver(() => { updateLayoutClass(); scheduleYtBounds(); }).observe(document.body);
 
   window.addEventListener('beforeunload', () => {
@@ -4152,6 +4250,9 @@ async function boot() {
   render();
   applyThemeForCurrentItem(true);
   await window.deckAPI?.setOpacity(state.settings.opacity || 0.96);
+  // Main reads this from the settings file before the window exists; pushing it
+  // again keeps the two in step if that read ever falls back to the default.
+  try { await window.deckAPI?.ytSetAdHandling?.(state.settings.blockAds !== false); } catch {}
   const reserve = await window.deckAPI?.setReserveSpace?.(state.settings.reserveSpace !== false);
   updateReserveButton(reserve || { enabled: state.settings.reserveSpace !== false });
 }

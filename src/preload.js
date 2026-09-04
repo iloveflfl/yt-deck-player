@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('deckAPI', {
   ytStop: () => ipcRenderer.invoke('yt:stop'),
   ytSetBounds: (rect) => ipcRenderer.invoke('yt:setBounds', rect),
   ytSetViewVisible: (visible) => ipcRenderer.invoke('yt:setViewVisible', visible),
+  ytSetAdHandling: (enabled) => ipcRenderer.invoke('yt:setAdHandling', enabled),
+  ytAdStats: () => ipcRenderer.invoke('yt:adStats'),
   onLockChanged: (callback) => ipcRenderer.on('deck-lock-changed', (_event, value) => callback(value)),
   onDisplayChanged: (callback) => ipcRenderer.on('deck-display-changed', (_event, value) => callback(value)),
   onTrayCommand: (callback) => ipcRenderer.on('deck-tray-command', (_event, value) => callback(value)),

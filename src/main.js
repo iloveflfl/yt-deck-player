@@ -30,10 +30,78 @@ let displayMetricsTimer = null;
 let ytView = null;
 let ytViewBounds = null;
 let ytIdleTimer = null;
+// The view is held back while a navigation is in flight and while the renderer
+// has a dialog open; both have to clear before it is allowed to paint.
+let ytViewLoading = false;
+let ytViewHiddenByModal = false;
+let ytRevealTimer = null;
+// Set when the current document has been dressed, so a stray report from the
+// page being navigated away from cannot un-hide the view.
+let ytViewDressed = false;
 // YouTube reads and the in-deck view share one partition, kept separate from
 // the deck's own storage. It holds only ordinary browsing state (consent,
 // visitor id); the app never signs in to any account.
 const YT_PARTITION = 'persist:ytdeck-view';
+
+/* --- Ad handling ----------------------------------------------------------
+ * Two independent levers, both behind one setting:
+ *
+ *   1. This request filter, which drops ad and ad-tracking calls. Note what is
+ *      NOT in the list: googlevideo.com. The video itself streams from there
+ *      and so does a stitched-in pre-roll, so blocking it stops playback
+ *      rather than the ads. What this does remove is the banner and overlay
+ *      ads and the tracking traffic around them.
+ *   2. Auto-skip, which presses the skip button the moment it appears -
+ *      measured at about 5.3s into a skippable ad. That is what actually deals
+ *      with pre-rolls, because they arrive inside the player response and no
+ *      URL filter can see them.
+ *
+ * Neither can do anything about a non-skippable ad: there is nothing to block
+ * that would not also block the song, and nothing to press. */
+const AD_BLOCK_PATTERNS = [
+  '*://*.doubleclick.net/*',
+  '*://*.googlesyndication.com/*',
+  '*://*.googleadservices.com/*',
+  '*://*.moatads.com/*',
+  '*://*.2mdn.net/*',
+  '*://*.adservice.google.com/*',
+  '*://www.youtube.com/pagead/*',
+  '*://www.youtube.com/ptracking*',
+  '*://www.youtube.com/api/stats/ads*',
+  '*://www.youtube.com/get_midroll_info*',
+  '*://s.youtube.com/api/stats/*',
+];
+let adHandlingEnabled = true;
+let adBlockCount = 0;
+let adSkipCount = 0;
+let adFilterInstalled = false;
+
+// onBeforeRequest replaces its listener rather than stacking, so the handler is
+// installed once and reads the flag; re-registering on every toggle would make
+// the enabled/disabled state depend on call order.
+function installAdFilter() {
+  if (adFilterInstalled) return;
+  // Two sessions: the in-deck view has its own partition, while the embedded
+  // player runs in the window's default session. Both serve ads.
+  const targets = [];
+  try { targets.push(session.fromPartition(YT_PARTITION)); } catch {}
+  try { targets.push(session.defaultSession); } catch {}
+  let installed = 0;
+  for (const target of targets) {
+    if (!target || !target.webRequest) continue;
+    try {
+      target.webRequest.onBeforeRequest({ urls: AD_BLOCK_PATTERNS }, (details, callback) => {
+        if (!adHandlingEnabled) { callback({ cancel: false }); return; }
+        adBlockCount += 1;
+        callback({ cancel: true });
+      });
+      installed += 1;
+    } catch (err) {
+      appendAppBarLog('Ad filter could not be installed', String(err && err.message));
+    }
+  }
+  adFilterInstalled = installed > 0;
+}
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 
@@ -82,16 +150,22 @@ function removeLegacyAccountArtifacts() {
   }
 }
 
-function readPersistedReserveSpace() {
+// The renderer owns the settings file; the main process only needs a couple of
+// booleans out of it before the window exists, so it reads them directly.
+function readPersistedFlag(key, fallback) {
   const { file } = documentsStorePath();
   for (const candidate of [file, `${file}.bak`]) {
     try {
       const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-      const value = parsed && parsed.settings && parsed.settings.reserveSpace;
+      const value = parsed && parsed.settings && parsed.settings[key];
       if (typeof value === 'boolean') return value;
     } catch {}
   }
-  return true;
+  return fallback;
+}
+
+function readPersistedReserveSpace() {
+  return readPersistedFlag('reserveSpace', true);
 }
 
 
@@ -1037,7 +1111,9 @@ app.whenReady().then(async () => {
   removeLegacyAccountArtifacts();
   removeStaleAppBarFromPreviousRun();
   reserveSpaceEnabled = readPersistedReserveSpace();
-  appendAppBarLog('Startup reserve-space preference', { reserveSpaceEnabled });
+  adHandlingEnabled = readPersistedFlag('blockAds', true);
+  installAdFilter();
+  appendAppBarLog('Startup preferences', { reserveSpaceEnabled, adHandlingEnabled });
   await createWindow();
   createTray();
 
@@ -1146,7 +1222,30 @@ ipcMain.handle('deck:close', () => {
 // inside the player (including ads); this simply crops the surrounding site
 // chrome so the deck frame shows the video instead of a miniature web page.
 const YT_VIEW_CSS = `
-  html, body { overflow: hidden !important; background: #000 !important; }
+  html, body { overflow: hidden !important; background: transparent !important; scrollbar-width: none !important; }
+  ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+  /* --- Rounded corners ----------------------------------------------------
+     A native view is composited above the page, so the deck's rounded panel
+     cannot clip it, and Electron 31 has no View.setBorderRadius either: the
+     video's square corners used to poke out past the frame. clip-path on the
+     root looks like the tidy answer and is not - it takes the video out of the
+     compositor and the picture stops being drawn at all. So every layer the
+     view paints carries the radius instead, and the layers that do not paint
+     are made transparent, which lets the deck's own panel show through at the
+     corners. The radius arrives from the main process with each bounds update
+     as --deck-radius; see applyYtViewRadius. */
+  .html5-video-player { overflow: hidden !important; }
+  /* Every full-bleed layer the watch page stacks behind the player has to be
+     rounded as well, or its square corner is what the deck ends up showing. */
+  #full-bleed-container, #player-full-bleed-container, #player-theater-container,
+  ytd-watch-flexy, ytd-page-manager, #page-manager, #content, ytd-app {
+    border-radius: var(--deck-radius, 12px) !important;
+    /* They are taller than the panel, so their rounded bottom sits off-screen
+       and the straight sides are what reach the bottom corners. */
+    height: 100vh !important; max-height: 100vh !important; min-height: 0 !important;
+  }
+  /* The player covers the viewport, so the app shell never needs to paint. */
+  ytd-app, #content, #page-manager { background: transparent !important; }
   #masthead-container, ytd-masthead, #guide, tp-yt-app-drawer, ytd-mini-guide-renderer,
   #secondary, #below, ytd-comments, #chat, ytd-merch-shelf-renderer, #donation-shelf {
     display: none !important;
@@ -1166,12 +1265,21 @@ const YT_VIEW_CSS = `
   }
   #player, #player-container, #player-container-outer, #player-container-inner, #movie_player, .html5-video-player {
     width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important;
-    margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
+    margin: 0 !important; padding: 0 !important;
+    /* Pushed in from the main process with each bounds update - see
+       applyYtViewRadius. Every layer has to carry it or a square one shows
+       through at the corners. */
+    border-radius: var(--deck-radius, 12px) !important;
   }
   /* contain MUST win here. Without !important YouTube's own object-fit:cover
      applies, and since the element is forced to the panel size the picture gets
      cropped - visibly different from the embedded player, which letterboxes. */
-  video.html5-main-video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; object-fit: contain !important; }
+  video.html5-main-video {
+    width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important;
+    object-fit: contain !important; border-radius: var(--deck-radius, 12px) !important;
+  }
+  /* With the canvas transparent this is what paints the letterbox bars. */
+  #movie_player, .html5-video-player { background: #000 !important; }
   /* The embedded player runs with controls:0, so the watch page must not paint
      its own control bar, title, gradients or end cards over the video. Ad UI
      (.video-ads / .ytp-ad-*) is deliberately NOT hidden: ads keep behaving
@@ -1185,21 +1293,310 @@ const YT_VIEW_CSS = `
   }
   /* No hover affordances either - nothing here is meant to be clicked. */
   .html5-video-player { cursor: default !important; }
+
+  /* --- Embed-player skin -------------------------------------------------
+     Embeddable tracks play in the IFrame player; embed-blocked ones fall back
+     to the watch page, which paints none of the embed's furniture. Switching
+     between the two looked like switching applications. These rules rebuild the
+     embed's presentation - scrim, title bar with the channel avatar, round
+     play/pause button, wordmark - over the watch page's own video, at the
+     geometry the embed itself reports at this panel size. */
+  #__deckSkin {
+    position: fixed; inset: 0; z-index: 2147483000;
+    border-radius: var(--deck-radius, 12px); overflow: hidden;
+    font-family: Roboto, "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    color: #fff; pointer-events: none;
+    opacity: 1; transition: opacity .7s ease;
+  }
+  /* The embed fades its controls out a few seconds into playback and brings
+     them back when the video stops; .dk-off is that same state. */
+  #__deckSkin.dk-off { opacity: 0; }
+  #__deckSkin.dk-off .dk-center { pointer-events: none; }
+  /* An ad paints YouTube's own controls, which the deck deliberately leaves
+     alone; ours would sit on top of the skip button. */
+  #__deckSkin.dk-hidden { display: none !important; }
+  #__deckSkin .dk-scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(rgba(0,0,0,.6) 0px, rgba(0,0,0,.54) 25%, rgba(0,0,0,.36) 50%, rgba(0,0,0,.18) 75%, rgba(0,0,0,.1) 100%);
+  }
+  #__deckSkin .dk-avatar {
+    position: absolute; left: 16px; top: 16px; width: 36px; height: 36px;
+    border-radius: 50%; background: rgba(255,255,255,.12) center/cover no-repeat;
+  }
+  #__deckSkin .dk-meta { position: absolute; left: 64px; top: 0; right: 12px; }
+  #__deckSkin .dk-title {
+    height: 36px; padding-top: 5px; box-sizing: border-box;
+    font-size: 18px; line-height: 26px; font-weight: 700; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #__deckSkin .dk-channel {
+    height: 13px; font-size: 12px; line-height: 13.2px; font-weight: 400; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #__deckSkin .dk-center {
+    position: absolute; left: 50%; top: 50%; margin: -28px 0 0 -28px;
+    width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.3);
+    border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; cursor: pointer;
+  }
+  #__deckSkin .dk-center svg { width: 36px; height: 36px; fill: #fff; }
+  #__deckSkin .dk-logo {
+    position: absolute; right: 32px; bottom: 16px;
+    width: 90px; height: 20px; opacity: .92;
+  }
+  #__deckSkin .dk-logo svg { width: 90px; height: 20px; fill: #fff; }
+  #__deckSkin .dk-share {
+    position: absolute; left: 12px; bottom: 2px; width: 56px; height: 48px;
+    border-radius: 48px; background: rgba(0,0,0,.3); border: 0; padding: 0;
+    display: none; align-items: center; justify-content: center;
+    pointer-events: auto; cursor: pointer;
+  }
+  #__deckSkin .dk-share svg { width: 24px; height: 24px; fill: #fff; }
+  /* Measured breakpoint: the embed drops its bottom-row buttons below 320px. */
+  @media (min-width: 320px) {
+    #__deckSkin .dk-share { display: flex; }
+  }
+  #__deckSkin .dk-toast {
+    position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%);
+    max-width: 80%; padding: 4px 10px; border-radius: 14px;
+    background: rgba(0,0,0,.72); font-size: 12px; line-height: 16px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; transition: opacity .16s ease;
+  }
+  #__deckSkin.dk-toast-on .dk-toast { opacity: 1; }
 `;
 
 const YT_VIEW_BRIDGE = `(() => {
   if (window.__deckBridge) return 'already';
   window.__deckBridge = true;
+  // youtube.com paints its own white behind everything, and the injected
+  // stylesheet loses to it; inline + important is what actually wins here.
+  const paintCanvas = () => {
+    try {
+      const root = document.documentElement;
+      // Only write when the page has actually taken it back, which it does on
+      // its own navigations - otherwise this runs twice a second for nothing.
+      if (root.style.getPropertyValue('background-color') !== 'transparent') {
+        root.style.setProperty('background-color', 'transparent', 'important');
+        root.style.setProperty('background-image', 'none', 'important');
+      }
+      const body = document.body;
+      if (body && body.style.getPropertyValue('background-color') !== 'transparent') {
+        body.style.setProperty('background-color', 'transparent', 'important');
+        body.style.setProperty('background-image', 'none', 'important');
+      }
+    } catch (e) {}
+  };
+  paintCanvas();
   const pick = () => document.querySelector('video.html5-main-video') || document.querySelector('video');
   const adShowing = () => !!document.querySelector('.ad-showing, .ytp-ad-player-overlay');
+  // Pre-roll ads used to sit there until the user clicked "skip" by hand, which
+  // is the one thing the deck cannot do for them from the outside. The control
+  // is in the DOM from the ad's first frame but display:none until YouTube's
+  // countdown ends - measured at about 5.3s in - so this presses it the moment
+  // it becomes real. Non-skippable ads have nothing to press and simply run;
+  // the deck already shows AD and freezes the progress bar for those.
+  const SKIP_BUTTONS = [
+    '.ytp-skip-ad-button',
+    '.ytp-ad-skip-button-modern',
+    '.ytp-ad-skip-button',
+    '.ytp-ad-skip-button-slot button',
+  ];
+  // Banner ads over the video have a close box rather than a skip button.
+  const CLOSE_BUTTONS = ['.ytp-ad-overlay-close-button', '.ytp-ad-overlay-close-container'];
+  const pressable = (el) => {
+    if (!el || el.disabled) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden'
+      && cs.pointerEvents !== 'none' && Number(cs.opacity || 1) > 0.05;
+  };
+  // The button ignores a scripted .click(): measured against a live ad, click(),
+  // a full mouse sequence and a full pointer sequence all left it sitting there
+  // for the rest of the break. It only reacts to a trusted input event, which a
+  // page cannot make - so the bridge just says where the button is and the main
+  // process presses it. See pressYtView.
+  let lastSkipAsk = 0;
+  const skipAd = () => {
+    try {
+      if (Date.now() - lastSkipAsk < 700) return false;
+      let target = null;
+      for (let i = 0; i < SKIP_BUTTONS.length && !target; i += 1) {
+        const b = document.querySelector(SKIP_BUTTONS[i]);
+        if (pressable(b)) target = b;
+      }
+      for (let i = 0; i < CLOSE_BUTTONS.length && !target; i += 1) {
+        const b = document.querySelector(CLOSE_BUTTONS[i]);
+        if (pressable(b)) target = b;
+      }
+      if (!target) return false;
+      const r = target.getBoundingClientRect();
+      const x = Math.round(r.left + r.width / 2);
+      const y = Math.round(r.top + r.height / 2);
+      // An injected event lands on whatever is topmost, exactly like a real
+      // mouse, so only ask for one when the button really is what is up there.
+      const top = document.elementFromPoint(x, y);
+      if (!top || (top !== target && !target.contains(top))) return false;
+      lastSkipAsk = Date.now();
+      report('skip', { x: x, y: y });
+      return true;
+    } catch (e) {}
+    return false;
+  };
+  // Faster than the reporting tick: the countdown ends on its own schedule and
+  // an ad pod runs several in a row, each with its own button.
+  setInterval(() => { if (adShowing()) skipAd(); }, 250);
+
   const gate = () => {
     const el = document.querySelector('.ytp-error, yt-playability-error-supported-renderers, #error-screen [class*=reason]');
     if (!el) return '';
     return (el.innerText || '').trim().slice(0, 140);
   };
+
+  // Rebuild the embedded player's presentation over the watch page. Everything
+  // shown comes from this page's own metadata. Note: youtube.com enforces
+  // Trusted Types, so nothing here may assign innerHTML - the elements are all
+  // built with createElement/createElementNS.
+  const skin = (() => {
+    const NS = 'http://www.w3.org/2000/svg';
+    const ICON_PAUSE = 'M6.5 3A1.5 1.5 0 005 4.5v15A1.5 1.5 0 006.5 21h2a1.5 1.5 0 001.5-1.5v-15A1.5 1.5 0 008.5 3h-2Zm9 0A1.5 1.5 0 0014 4.5v15a1.5 1.5 0 001.5 1.5h2a1.5 1.5 0 001.5-1.5v-15A1.5 1.5 0 0017.5 3h-2Z';
+    const ICON_PLAY = 'M6 4.75c0-.98 1.06-1.6 1.91-1.1l12.5 7.25c.85.49.85 1.71 0 2.2L7.91 20.35A1.27 1.27 0 016 19.25V4.75Z';
+    const ICON_SHARE = 'M10 3.158V7.51c-5.428.223-8.27 3.75-8.875 11.199-.04.487-.07.975-.09 1.464l-.014.395c-.014.473.578.684.88.32.302-.368.61-.73.925-1.086l.244-.273c1.79-1.967 3-2.677 4.93-2.917a18.011 18.011 0 012-.112v4.346a1 1 0 001.646.763l9.805-8.297 1.55-1.31-1.55-1.31-9.805-8.297A1 1 0 0010 3.158Zm2 6.27v.002-4.116l7.904 6.688L12 18.689v-4.212l-2.023.024c-1.935.022-3.587.17-5.197 1.024a9 9 0 00-1.348.893c.355-1.947.916-3.39 1.63-4.425 1.062-1.541 2.607-2.385 5.02-2.485L12 9.428Z';
+    const LOGO = 'M 16.687006,0.99998524 C 13.551069,1.0327972 7.0245114,1.1624852 4.9995126,1.6874852 c -1.4999991,0.4 -2.5999984,1.6 -2.9999982,3 -0.6999995,2.7 -0.6874995,8.3124998 -0.6874995,8.3124998 0,0 -0.0125,5.6125 0.6874995,8.3125 0.3999998,1.5 1.5999991,2.6 2.9999982,3 2.6999984,0.7 13.4062424,0.6875 13.4062424,0.6875 0,0 10.706243,0.0125 13.406241,-0.6875 1.5,-0.4 2.599999,-1.6 2.999999,-3 0.699999,-2.7 0.687499,-8.3125 0.687499,-8.3125 0,0 0.1125,-5.6124998 -0.687499,-8.3124998 -0.4,-1.5 -1.599999,-2.6 -2.999999,-3 C 29.111998,0.98748524 18.405755,0.99998524 18.405755,0.99998524 c 0,0 -0.673437,-0.010938 -1.718749,0 z m 72.218706,0.90624996 0,21.2812498 2.781248,0 0.3125,-1.375 0.09375,0 c 0.3,0.5 0.71875,0.8875 1.218749,1.1875 0.5,0.3 1.0875,0.40625 1.687499,0.40625 1.1,0 1.999999,-0.49375 2.499999,-1.59375 0.5,-1.1 0.812499,-2.70625 0.812499,-4.90625 l 0,-2.40625 c 0,-1.6 -0.1125,-2.90625 -0.312499,-3.90625 -0.2,-0.8999999 -0.5,-1.5937499 -1,-2.0937499 -0.5,-0.4 -1.106249,-0.5937499 -1.906249,-0.5937499 -0.599999,0 -1.187499,0.1999999 -1.687499,0.4999999 -0.499999,0.3 -1.018749,0.80625 -1.218749,1.40625 l 0,-7.9062499 -3.281248,0 z m -49.99997,0.78125 3.906248,13.9062498 0.1875,6.71875 3.312498,0 0,-6.71875 3.874997,-13.9062498 -3.374998,0 -1.406249,6.3124999 c -0.4,1.8999999 -0.712499,3.1999999 -0.812499,3.9999999 l -0.09375,0 c -0.2,-1.1 -0.5125,-2.4 -0.8125,-3.9999999 l -1.374999,-6.3124999 -3.406248,0 z m 29.593732,0 0,2.71875 3.406248,0 0,17.9062498 3.281248,0 0,-17.9062498 3.406248,0 c 0,0 0.0062,-2.71875 -0.09375,-2.71875 l -9.999994,0 z m -53.499967,5.125 8.906244,5.1874998 -8.906244,5.09375 0,-10.2812498 z m 89.406193,0.09375 c -1.7,0 -2.89375,0.5937499 -3.59375,1.5937499 -0.69999,0.9999999 -0.999995,2.6062499 -0.999995,4.9062499 l 0,2.59375 c 0,2.2 0.300005,3.90625 0.999995,4.90625 0.7,1.1 1.8,1.59375 3.5,1.59375 1.4,0 2.3875,-0.3 3.1875,-1 0.7,-0.7 1.09375,-1.69375 1.09375,-3.09375 l 0,-0.5 -2.90625,-0.21875 c 0,1 -0.0812,1.6 -0.28125,2 -0.1,0.4 -0.5,0.625 -1,0.625 -0.3,0 -0.6125,-0.1125 -0.8125,-0.3125 -0.2,-0.3 -0.30625,-0.59375 -0.40625,-1.09375 -0.1,-0.5 -0.0937,-1.21875 -0.0937,-2.21875 l 0,-0.78125 5.71875,-0.09375 0,-2.625 c 0,-1.6 -0.10625,-2.7875 -0.40625,-3.6875 -0.2,-0.8999999 -0.7125,-1.5999999 -1.3125,-1.9999999 -0.7,-0.4 -1.4875,-0.5937499 -2.6875,-0.5937499 z m -50.499967,0.09375 c -1.099999,0 -2.018749,0.1874999 -2.718748,0.6874999 -0.7,0.4 -1.2,1.125 -1.499999,2.1249999 -0.3,1 -0.5,2.275 -0.5,3.875 l 0,2.21875 c 0,1.5 0.10625,2.78125 0.40625,3.78125 0.2,0.9 0.706249,1.625 1.406249,2.125 0.699999,0.5 1.712499,0.68125 2.812498,0.78125 1.199999,0 2.081249,-0.2875 2.781249,-0.6875 0.699999,-0.4 1.099999,-1.09375 1.499999,-2.09375 0.399999,-1 0.499999,-2.30625 0.499999,-3.90625 l 0,-2.21875 c 0,-1.6 -0.2,-2.875 -0.499999,-3.875 -0.3,-0.8999999 -0.8,-1.6249999 -1.499999,-2.1249999 -0.7,-0.5 -1.5875,-0.6874999 -2.687499,-0.6874999 z m 12.187493,0.09375 0,11.9062498 c -0.1,0.3 -0.29375,0.4875 -0.59375,0.6875 -0.2,0.2 -0.5125,0.3125 -0.812499,0.3125 -0.3,0 -0.5875,-0.10625 -0.6875,-0.40625 -0.1,-0.3 -0.1875,-0.70625 -0.1875,-1.40625 l 0,-10.9999998 -3.406248,0 0,11.2187498 c 0,1.4 0.1875,2.39375 0.6875,3.09375 0.499999,0.7 1.218749,1 2.218748,1 1.4,0 2.487499,-0.69375 3.187499,-2.09375 l 0.09375,0 0.3125,1.78125 2.593749,0 0,-14.9999998 c 0,0 -3.406248,0.0062 -3.406248,-0.09375 z m 17.312489,0 0,11.9062498 c -0.1,0.3 -0.293749,0.4875 -0.593749,0.6875 -0.2,0.2 -0.5125,0.3125 -0.8125,0.3125 -0.3,0 -0.587499,-0.10625 -0.687499,-0.40625 -0.1,-0.3 -0.21875,-0.70625 -0.21875,-1.40625 l 0,-10.9999998 -3.406248,0 0,11.2187498 c 0,1.4 0.21875,2.39375 0.718749,3.09375 0.5,0.7 1.1875,1 2.187499,1 1.399999,0 2.518749,-0.69375 3.218748,-2.09375 l 0.09375,0 0.28125,1.78125 2.624998,0 0,-14.9999998 c 0,0 -3.406248,0.0062 -3.406248,-0.09375 z m 20.906235,2.0937498 c 0.4,0 0.58125,0.1125 0.78125,0.3125 0.2,0.3 0.30625,0.59375 0.40625,1.09375 0.1,0.5 0.0937,1.21875 0.0937,2.21875 l 0,1.09375 -2.5,0 0,-1.09375 c 0,-1 -0.006,-1.71875 0.0937,-2.21875 0,-0.4 0.1125,-0.8 0.3125,-1 0.2,-0.3 0.5125,-0.40625 0.8125,-0.40625 z m -50.499967,0.125 c 0.5,0 0.8,0.1875 1,0.6875 0.199999,0.5 0.281249,1.30625 0.281249,2.40625 l 0,4.6875 c 0,1.1 -0.08125,1.90625 -0.281249,2.40625 -0.2,0.5 -0.5,0.6875 -1,0.6875 -0.5,0 -0.799999,-0.1875 -0.999999,-0.6875 -0.2,-0.5 -0.3125,-1.30625 -0.3125,-2.40625 l 0,-4.6875 c 0,-1.1 0.1125,-1.90625 0.3125,-2.40625 0.2,-0.5 0.499999,-0.6875 0.999999,-0.6875 z m 39.687476,0.09375 c 0.3,0 0.6125,0.10625 0.8125,0.40625 0.2,0.3 0.275,0.675 0.375,1.375 0.1,0.6 0.124999,1.51875 0.124999,2.71875 l 0.09375,1.90625 c 0,1.1 0.0062,1.99375 -0.09375,2.59375 -0.1,0.6 -0.199999,1.08125 -0.499999,1.28125 -0.2,0.3 -0.50625,0.40625 -0.90625,0.40625 -0.3,0 -0.512499,-0.0875 -0.812499,-0.1875 -0.2,-0.1 -0.39375,-0.29375 -0.59375,-0.59375 l 0,-8.5 c 0.1,-0.4 0.29375,-0.7 0.59375,-1 0.3,-0.3 0.606249,-0.40625 0.906249,-0.40625 z';
+    const HOLD = 5000;
+    const el = (tag, cls, parent) => {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (parent) parent.appendChild(n);
+      return n;
+    };
+    const draw = (parent, viewBox, d) => {
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', viewBox);
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+      parent.appendChild(svg);
+      return path;
+    };
+    let root = null, titleEl = null, chEl = null, avEl = null, iconEl = null, toastEl = null;
+    let shownUntil = 0, wasPlaying = false, avatarSrc = '', toastTimer = 0, hoverBound = false;
+    const reveal = () => { shownUntil = Date.now() + HOLD; };
+    const build = () => {
+      if (root && root.isConnected) return root;
+      root = document.createElement('div');
+      root.id = '__deckSkin';
+      el('div', 'dk-scrim', root);
+      avEl = el('div', 'dk-avatar', root);
+      const meta = el('div', 'dk-meta', root);
+      titleEl = el('div', 'dk-title', meta);
+      chEl = el('div', 'dk-channel', meta);
+      const btn = el('button', 'dk-center', root);
+      btn.type = 'button';
+      btn.setAttribute('aria-label', 'play/pause');
+      iconEl = draw(btn, '0 0 24 24', ICON_PLAY);
+      btn.addEventListener('click', () => {
+        const v = pick();
+        if (!v) return;
+        if (v.paused) v.play().catch(() => {}); else v.pause();
+        reveal();
+      });
+      const share = el('button', 'dk-share', root);
+      share.type = 'button';
+      share.setAttribute('aria-label', 'copy link');
+      draw(share, '0 0 24 24', ICON_SHARE);
+      share.addEventListener('click', () => {
+        const id = new URLSearchParams(location.search).get('v') || '';
+        if (!id) return;
+        try { navigator.clipboard.writeText('https://www.youtube.com/watch?v=' + id); } catch (e) {}
+        toastEl.textContent = 'Link copied';
+        root.classList.add('dk-toast-on');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => root.classList.remove('dk-toast-on'), 1400);
+        reveal();
+      });
+      draw(el('div', 'dk-logo', root), '0 0 110 26', LOGO);
+      toastEl = el('div', 'dk-toast', root);
+      document.documentElement.appendChild(root);
+      // Bound to the document, not to the node, so it must not be re-added
+      // every time the page makes us rebuild.
+      if (!hoverBound) {
+        hoverBound = true;
+        document.addEventListener('mousemove', reveal, true);
+      }
+      reveal();
+      return root;
+    };
+    // The page keeps the real metadata in ytInitialPlayerResponse; the rendered
+    // header lives in #below, which the deck hides, so read the data directly.
+    const details = () => {
+      const pr = window.ytInitialPlayerResponse;
+      const vd = pr && pr.videoDetails;
+      const fallback = (document.title || '').replace(' - YouTube', '');
+      return { title: (vd && vd.title) || fallback, channel: (vd && vd.author) || '' };
+    };
+    const ownerAvatar = () => {
+      const img = document.querySelector('#owner img, ytd-video-owner-renderer img, #avatar img');
+      const src = img && (img.currentSrc || img.src);
+      if (src) return src;
+      const seen = new Set();
+      const walk = (node, depth) => {
+        if (!node || depth > 9 || typeof node !== 'object' || seen.has(node)) return '';
+        seen.add(node);
+        const owner = node.videoOwnerRenderer;
+        const thumbs = owner && owner.thumbnail && owner.thumbnail.thumbnails;
+        if (thumbs && thumbs.length) return thumbs[thumbs.length - 1].url || '';
+        for (const key in node) {
+          const hit = walk(node[key], depth + 1);
+          if (hit) return hit;
+        }
+        return '';
+      };
+      try { return walk(window.ytInitialData, 0); } catch (e) { return ''; }
+    };
+    return {
+      sync(isAd) {
+        try {
+          const r = build();
+          r.classList.toggle('dk-hidden', !!isAd);
+          if (isAd) return;
+          const info = details();
+          if (info.title && titleEl.textContent !== info.title) titleEl.textContent = info.title;
+          if (info.channel && chEl.textContent !== info.channel) chEl.textContent = info.channel;
+          if (!avatarSrc) {
+            avatarSrc = ownerAvatar();
+            // A quote in the url would break the declaration and leave the
+            // avatar blank; encode the characters that could close it.
+            if (avatarSrc) {
+              const safe = String(avatarSrc).replace(/["'\\()\s]/g, encodeURIComponent);
+              avEl.style.backgroundImage = 'url("' + safe + '")';
+            }
+          }
+          const v = pick();
+          const playing = !!(v && !v.paused && !v.ended && v.readyState > 2);
+          // Paused, buffering or just started: the embed shows its controls.
+          if (!playing || !wasPlaying) reveal();
+          wasPlaying = playing;
+          const want = playing ? ICON_PAUSE : ICON_PLAY;
+          if (iconEl.getAttribute('d') !== want) iconEl.setAttribute('d', want);
+          r.classList.toggle('dk-off', playing && Date.now() > shownUntil);
+        } catch (e) {}
+      },
+    };
+  })();
   let lastState = '';
+  // Captured now, before the page has a chance to swap console.info out from
+  // under the bridge - that would take progress, ads and ended with it.
+  const emit = (() => {
+    try {
+      const fn = console.info || console.log;
+      return fn.bind(console);
+    } catch (e) { return null; }
+  })();
   const report = (type, extra) => {
-    try { console.info('DECKEVT' + JSON.stringify(Object.assign({ type }, extra || {}))); } catch (e) {}
+    if (!emit) return;
+    try { emit('DECKEVT' + JSON.stringify(Object.assign({ type }, extra || {}))); } catch (e) {}
   };
   setInterval(() => {
     const blocked = gate();
@@ -1210,6 +1607,10 @@ const YT_VIEW_BRIDGE = `(() => {
     const v = pick();
     if (!v) { if (lastState !== 'waiting') { lastState = 'waiting'; report('waiting'); } return; }
     const ad = adShowing();
+    if (ad) skipAd();
+    // YouTube repaints its own theme background on navigations within the page.
+    paintCanvas();
+    skin.sync(ad);
     report('progress', { time: v.currentTime || 0, duration: v.duration || 0, paused: !!v.paused, ad: ad, rate: v.playbackRate || 1 });
     if (!ad && v.ended) { if (lastState !== 'ended') { lastState = 'ended'; report('ended'); } }
     else if (v.ended === false) { lastState = ''; }
@@ -1228,10 +1629,39 @@ const YT_VIEW_BRIDGE = `(() => {
   return 'ready';
 })()`;
 
+// YouTube's skip button only reacts to a trusted input event, so the press has
+// to be made here: sendInputEvent puts a real one into the view, addressed to
+// the view alone. It does not touch the OS cursor and cannot reach any other
+// window. Coordinates come from the bridge in the view's own CSS pixels.
+function pressYtView(x, y) {
+  if (!ytView) return false;
+  // The coordinates come from the page, so treat them as input: a press has to
+  // land inside the view or not happen at all.
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const width = Math.max(1, Math.round(ytViewBounds?.width || 0));
+  const height = Math.max(1, Math.round(ytViewBounds?.height || 0));
+  const px = Math.round(x);
+  const py = Math.round(y);
+  if (px < 0 || py < 0 || (ytViewBounds && (px >= width || py >= height))) return false;
+  try {
+    const wc = ytView.webContents;
+    if (!wc || wc.isDestroyed()) return false;
+    wc.sendInputEvent({ type: 'mouseMove', x: px, y: py });
+    wc.sendInputEvent({ type: 'mouseDown', x: px, y: py, button: 'left', clickCount: 1 });
+    wc.sendInputEvent({ type: 'mouseUp', x: px, y: py, button: 'left', clickCount: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Parking instead of destroying keeps the renderer warm, so a run of
 // age-restricted tracks switches in without paying the process start-up cost
 // again. It is torn down for real once the deck stops needing it.
 function parkYtView() {
+  clearTimeout(ytRevealTimer);
+  ytRevealTimer = null;
+  ytViewLoading = false;
   if (!ytView) return;
   try { ytView.setBounds({ x: -20000, y: -20000, width: 16, height: 16 }); } catch {}
   try { ytView.webContents.loadURL('about:blank'); } catch {}
@@ -1241,6 +1671,11 @@ function parkYtView() {
 
 function destroyYtView() {
   clearTimeout(ytIdleTimer);
+  clearTimeout(ytRevealTimer);
+  ytRevealTimer = null;
+  ytViewLoading = false;
+  ytViewHiddenByModal = false;
+  ytViewRadiusPushed = null;
   if (!ytView) return;
   try {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(ytView);
@@ -1249,17 +1684,54 @@ function destroyYtView() {
   ytView = null;
 }
 
+// Placing the view and deciding whether it may be seen are the same operation:
+// every path that moves it also has to respect the two hold-backs, or the view
+// pops into sight halfway through a page load.
 function applyYtViewBounds() {
-  if (!ytView || !ytViewBounds) return;
-  const r = ytViewBounds;
-  try {
+  if (!ytView) return;
+  // No bounds means the deck has no panel to show it in - a layout narrow
+  // enough to drop the preview, for instance - so there is nowhere to be.
+  const hidden = ytViewLoading || ytViewHiddenByModal || !ytViewBounds;
+  const place = () => {
+    if (!ytViewBounds) return;
+    const r = ytViewBounds;
     ytView.setBounds({
       x: Math.max(0, Math.round(r.x)),
       y: Math.max(0, Math.round(r.y)),
       width: Math.max(1, Math.round(r.width)),
       height: Math.max(1, Math.round(r.height)),
     });
+  };
+  if (typeof ytView.setVisible === 'function') {
+    try { ytView.setVisible(!hidden); } catch {}
+    try { place(); } catch {}
+    return;
+  }
+  // Older builds without View.setVisible: park it off-screen instead.
+  try {
+    if (hidden) ytView.setBounds({ x: -20000, y: -20000, width: 16, height: 16 });
+    else place();
   } catch {}
+}
+
+// A watch page spends its first second or so as a white document with a
+// half-built player in it. The embedded player never shows anything like that,
+// so the view stays hidden - the deck's own panel shows through - until the
+// bridge reports a frame, or until the wait has clearly gone wrong.
+function holdYtView() {
+  clearTimeout(ytRevealTimer);
+  ytViewLoading = true;
+  ytViewDressed = false;
+  applyYtViewBounds();
+  ytRevealTimer = setTimeout(revealYtView, 12000);
+}
+
+function revealYtView() {
+  clearTimeout(ytRevealTimer);
+  ytRevealTimer = null;
+  if (!ytViewLoading) return;
+  ytViewLoading = false;
+  applyYtViewBounds();
 }
 
 function ensureYtView() {
@@ -1274,8 +1746,13 @@ function ensureYtView() {
       autoplayPolicy: 'no-user-gesture-required',
     },
   });
+  // Transparent, so the corners the page leaves unpainted show the deck's own
+  // panel instead of a flat colour that could never match a translucent theme.
+  // The letterbox black comes from the player element, which is rounded with
+  // everything else; nothing here relies on the view painting a background.
+  try { ytView.setBackgroundColor('#00000000'); } catch {}
   ytView.webContents.setUserAgent(CHROME_UA);
-  ytView.setBorderRadius?.(Number.isFinite(ytViewBounds?.radius) ? ytViewBounds.radius : 12);
+  applyYtViewRadius();
   mainWindow.contentView.addChildView(ytView);
   applyYtViewBounds();
 
@@ -1285,23 +1762,60 @@ function ensureYtView() {
     if (typeof message !== 'string' || !message.startsWith('DECKEVT')) return;
     try {
       const payload = JSON.parse(message.slice(7));
+      // Not deck state - a request to press something. The renderer has no use
+      // for it and no way to act on it.
+      if (payload.type === 'skip') {
+        if (adHandlingEnabled && pressYtView(payload.x, payload.y)) adSkipCount += 1;
+        return;
+      }
+      // The first progress report means the page is past its build-up and the
+      // skin has been drawn, so there is finally something worth showing.
+      if (ytViewDressed && (payload.type === 'progress' || payload.type === 'blocked')) revealYtView();
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-view-event', payload);
     } catch {}
   });
-  ytView.webContents.on('did-finish-load', () => {
+  // dom-ready fires long before the watch page has finished pulling in its
+  // sidebars and comments, so dressing it there is what keeps the deck from
+  // showing a half-built YouTube page. did-finish-load repeats it because a
+  // late-arriving stylesheet can otherwise win; both calls are idempotent.
+  const dress = () => {
+    ytViewDressed = true;
+    ytViewRadiusPushed = null;
     ytView?.webContents.insertCSS(YT_VIEW_CSS).catch(() => {});
     ytView?.webContents.executeJavaScript(YT_VIEW_BRIDGE).catch(() => {});
-  });
+    applyYtViewRadius(true);
+  };
+  ytView.webContents.on('dom-ready', dress);
+  ytView.webContents.on('did-finish-load', dress);
   ytView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   return ytView;
+}
+
+// The page does its own corner rounding, so the radius has to travel with the
+// bounds. setBorderRadius is still called for the Electron versions that have
+// it; on 31 it is absent and the CSS below is the whole mechanism.
+let ytViewRadiusPushed = null;
+function applyYtViewRadius(force) {
+  if (!ytView) return;
+  const radius = Number.isFinite(ytViewBounds?.radius) ? Math.max(0, Math.round(ytViewBounds.radius)) : 12;
+  try { ytView.setBorderRadius?.(radius); } catch {}
+  // Bounds arrive on every resize tick; re-running a script into the page for
+  // an unchanged value is pure noise.
+  if (!force && ytViewRadiusPushed === radius) return;
+  ytViewRadiusPushed = radius;
+  try {
+    const wc = ytView.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    wc.executeJavaScript(
+      `document.documentElement && document.documentElement.style.setProperty('--deck-radius', '${radius}px')`
+    ).catch(() => {});
+  } catch {}
 }
 
 ipcMain.handle('yt:setBounds', (_event, rect) => {
   ytViewBounds = rect && Number.isFinite(rect.width) ? rect : null;
   applyYtViewBounds();
-  if (ytView && ytViewBounds && Number.isFinite(ytViewBounds.radius)) {
-    try { ytView.setBorderRadius?.(ytViewBounds.radius); } catch {}
-  }
+  applyYtViewRadius();
   return true;
 });
 
@@ -1310,6 +1824,7 @@ ipcMain.handle('yt:play', async (_event, videoId) => {
   clearTimeout(ytIdleTimer);
   const view = ensureYtView();
   if (!view) return { ok: false, message: 'view unavailable' };
+  holdYtView();
   try {
     await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
   } catch (err) {
@@ -1336,17 +1851,19 @@ ipcMain.handle('yt:command', async (_event, command, value) => {
 // A native view always paints above the page, so an open dialog would be
 // hidden behind the video. The renderer parks the view while a modal is up.
 ipcMain.handle('yt:setViewVisible', (_event, visible) => {
+  ytViewHiddenByModal = !visible;
   if (!ytView) return false;
-  try {
-    if (typeof ytView.setVisible === 'function') { ytView.setVisible(!!visible); return true; }
-  } catch {}
-  // Older builds without View.setVisible: move it out of the way instead.
-  try {
-    if (!visible) ytView.setBounds({ x: -20000, y: -20000, width: 16, height: 16 });
-    else applyYtViewBounds();
-  } catch {}
+  applyYtViewBounds();
   return true;
 });
+
+ipcMain.handle('yt:setAdHandling', (_event, enabled) => {
+  adHandlingEnabled = enabled !== false;
+  installAdFilter();
+  return { enabled: adHandlingEnabled, blocked: adBlockCount, skipped: adSkipCount };
+});
+
+ipcMain.handle('yt:adStats', () => ({ enabled: adHandlingEnabled, blocked: adBlockCount, skipped: adSkipCount }));
 
 ipcMain.handle('yt:stop', () => {
   parkYtView();

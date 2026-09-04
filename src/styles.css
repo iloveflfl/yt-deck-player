@@ -1900,19 +1900,19 @@ body.is-low .yp-list, body.is-mini .yp-list { max-height: calc(100vh - 150px); }
 body.yt-mode .preview-panel { display: block !important; position: relative; }
 body.yt-mode .preview-fallback { display: none !important; }
 body.yt-mode .youtube-frame { visibility: hidden; }
-body.yt-mode .preview-panel::after {
-  content: "";
+/* The native view needs a second or two to navigate, and it is not allowed to
+   paint until it has a frame; the artwork fills that gap so the panel does not
+   go empty. It also stands in whenever the view is parked for a dialog. The
+   view covers this once it is up. */
+.yt-poster { display: none; }
+body.yt-mode .yt-poster {
+  display: block;
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  background: #000 center / cover no-repeat;
+  z-index: 3;
   pointer-events: none;
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 55%, transparent);
-  animation: yt-frame 2.6s ease-in-out infinite;
-  z-index: 4;
-}
-@keyframes yt-frame {
-  0%, 100% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 40%, transparent); }
-  50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent2) 80%, transparent); }
 }
 body.yt-mode .progress-wrap { opacity: .75; cursor: default; }
 body.yt-mode #statusText { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2) 40%, transparent); }
