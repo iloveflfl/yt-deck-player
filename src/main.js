@@ -38,6 +38,10 @@ let ytRevealTimer = null;
 // Set when the current document has been dressed, so a stray report from the
 // page being navigated away from cannot un-hide the view.
 let ytViewDressed = false;
+// The deck's playback settings, kept so a freshly loaded document can be handed
+// them immediately rather than playing its first seconds at YouTube's level.
+let ytLastVolume = null;
+let ytLastRate = null;
 // YouTube reads and the in-deck view share one partition, kept separate from
 // the deck's own storage. It holds only ordinary browsing state (consent,
 // visitor id); the app never signs in to any account.
@@ -1448,6 +1452,59 @@ const YT_VIEW_BRIDGE = `(() => {
   // an ad pod runs several in a row, each with its own button.
   setInterval(() => { if (adShowing()) skipAd(); }, 250);
 
+  // --- Volume --------------------------------------------------------------
+  // YouTube normalises loudness per track by writing its own gain onto the
+  // media element - measured at 0.54, 0.90, 0.98 and 0.98 across four tracks.
+  // The embedded player multiplies the listener's volume into that gain. This
+  // view used to assign volume outright, which threw the normalisation away:
+  // the same track came out louder here than in the embedded player, and every
+  // source change - an ad starting, an ad ending - handed the element back to
+  // YouTube's gain with the deck's setting gone.
+  //
+  // So: remember what we wrote. Anything else on the element came from YouTube
+  // and is the new baseline to scale, not a value to overwrite.
+  // What remains: YouTube writes the gain as playback starts and the event
+  // reaches us a frame later, so about 19ms of audio leads at the raw level.
+  // Gating that frame with muted was tried and does not work - the clock starts
+  // before the write, so the gate lifts first - and intercepting the property
+  // means lying to the page about what it just set.
+  let deckVolume = 1;
+  let normGain = 1;
+  let appliedVolume = -1;
+  const syncVolume = (v) => {
+    if (!v) return;
+    if (Math.abs(v.volume - appliedVolume) > 0.001) normGain = v.volume;
+    const want = Math.max(0, Math.min(1, normGain * deckVolume));
+    if (Math.abs(v.volume - want) > 0.001) {
+      try { v.volume = want; } catch (e) {}
+    }
+    appliedVolume = want;
+  };
+  let volumeBoundTo = null;
+  const bindVolume = (v) => {
+    if (!v || volumeBoundTo === v) return;
+    volumeBoundTo = v;
+    // Reacting to events rather than waiting for the next tick is what keeps the
+    // correction inaudible - both across an ad boundary and at the very start,
+    // where the tick alone left one frame at YouTube's own level.
+    try {
+      v.addEventListener('volumechange', () => syncVolume(v));
+      ['loadstart', 'loadedmetadata', 'canplay', 'play', 'playing'].forEach((name) => {
+        v.addEventListener(name, () => syncVolume(v));
+      });
+    } catch (e) {}
+    syncVolume(v);
+  };
+  // The player element is created well after the document is, so watch for it
+  // instead of waiting to notice on a poll.
+  try {
+    const watcher = new MutationObserver(() => {
+      const v = pick();
+      if (v) bindVolume(v);
+    });
+    watcher.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+
   const gate = () => {
     const el = document.querySelector('.ytp-error, yt-playability-error-supported-renderers, #error-screen [class*=reason]');
     if (!el) return '';
@@ -1606,6 +1663,8 @@ const YT_VIEW_BRIDGE = `(() => {
     }
     const v = pick();
     if (!v) { if (lastState !== 'waiting') { lastState = 'waiting'; report('waiting'); } return; }
+    bindVolume(v);
+    syncVolume(v);
     const ad = adShowing();
     if (ad) skipAd();
     // YouTube repaints its own theme background on navigations within the page.
@@ -1616,12 +1675,20 @@ const YT_VIEW_BRIDGE = `(() => {
     else if (v.ended === false) { lastState = ''; }
   }, 500);
   window.__deckCmd = (cmd, value) => {
+    // Volume is remembered whether or not the page has a player yet, so a
+    // setting that arrives during the load is applied to the first frame
+    // instead of after it.
+    if (cmd === 'volume') {
+      deckVolume = Math.min(1, Math.max(0, Number(value) / 100));
+      const target = pick();
+      if (target) { target.muted = false; bindVolume(target); syncVolume(target); }
+      return true;
+    }
     const v = pick();
     if (!v) return false;
     if (cmd === 'play') { v.play().catch(() => {}); return true; }
     if (cmd === 'pause') { v.pause(); return true; }
     if (cmd === 'toggle') { if (v.paused) v.play().catch(() => {}); else v.pause(); return !v.paused; }
-    if (cmd === 'volume') { v.volume = Math.min(1, Math.max(0, Number(value) / 100)); v.muted = false; return true; }
     if (cmd === 'rate') { try { v.playbackRate = Number(value) || 1; } catch (e) {} return true; }
     if (cmd === 'seek') { try { v.currentTime = Number(value) || 0; } catch (e) {} return true; }
     return false;
@@ -1782,7 +1849,18 @@ function ensureYtView() {
     ytViewDressed = true;
     ytViewRadiusPushed = null;
     ytView?.webContents.insertCSS(YT_VIEW_CSS).catch(() => {});
-    ytView?.webContents.executeJavaScript(YT_VIEW_BRIDGE).catch(() => {});
+    ytView?.webContents.executeJavaScript(YT_VIEW_BRIDGE)
+      .then(() => {
+        // Hand the new document the deck's settings straight away; the bridge
+        // holds them until a player exists, so nothing is ever audible at
+        // YouTube's own level first.
+        if (ytLastVolume === null && ytLastRate === null) return null;
+        const calls = [];
+        if (ytLastVolume !== null) calls.push('window.__deckCmd(\'volume\', ' + JSON.stringify(ytLastVolume) + ')');
+        if (ytLastRate !== null) calls.push('window.__deckCmd(\'rate\', ' + JSON.stringify(ytLastRate) + ')');
+        return ytView?.webContents.executeJavaScript(calls.join(';') + ';true');
+      })
+      .catch(() => {});
     applyYtViewRadius(true);
   };
   ytView.webContents.on('dom-ready', dress);
@@ -1840,6 +1918,8 @@ ipcMain.handle('yt:play', async (_event, videoId) => {
 });
 
 ipcMain.handle('yt:command', async (_event, command, value) => {
+  if (command === 'volume' && Number.isFinite(Number(value))) ytLastVolume = Number(value);
+  if (command === 'rate' && Number.isFinite(Number(value))) ytLastRate = Number(value);
   if (!ytView) return false;
   try {
     return await ytView.webContents.executeJavaScript(`window.__deckCmd && window.__deckCmd(${JSON.stringify(command)}, ${JSON.stringify(value ?? null)})`);

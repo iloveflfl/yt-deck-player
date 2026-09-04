@@ -3894,6 +3894,13 @@ async function startYouTubeMode(item) {
   // A fresh view starts at YouTube's own defaults, so hand it the deck's
   // current settings. Missing the rate here meant a 1.5x session silently
   // dropped to 1x the moment an embed-blocked track came up.
+  //
+  // Immediately, not on a timer: the view used to spend its first ~1.8 seconds
+  // audible at YouTube's level, which on a quiet deck setting is a burst.
+  ytSendCommand('volume', state.playback.volume);
+  ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1));
+  // Repeated once the page has settled, in case the first pair landed before
+  // the bridge was installed.
   window.setTimeout(() => {
     if (!ytMode || !currentItem || itemKey(currentItem) !== itemKey(item)) return;
     ytSendCommand('volume', state.playback.volume);
