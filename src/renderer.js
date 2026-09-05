@@ -2393,8 +2393,19 @@ function playPrevious() {
   if (ytMode) stopYouTubeMode();
   if (!ready) return;
   const prev = historyStack.pop();
-  if (prev) playItem(prev, { fromHistory: true });
-  else if (player.seekTo) player.seekTo(0, true);
+  if (prev) {
+    // Move the sequential cursor back with the listener. Without this, going
+    // back one track and letting it finish resumed from wherever playback had
+    // reached - 10, 11, 12, back to 11, then 13, with 12 silently skipped.
+    // Picking a track from the browser already realigns the cursor this way.
+    if (state.playback.shuffleMode === 'off') {
+      const pool = buildActivePool();
+      const key = itemKey(prev);
+      const idx = pool.findIndex((poolItem) => itemKey(poolItem) === key);
+      if (idx >= 0) sequentialIndex = idx;
+    }
+    playItem(prev, { fromHistory: true });
+  } else if (player.seekTo) player.seekTo(0, true);
 }
 
 
@@ -2690,6 +2701,11 @@ function deletePlaylist(id) {
 // or the in-deck YouTube view via its bridge.
 function seekPlaybackTo(seconds) {
   const t = Math.max(0, Number(seconds) || 0);
+  // The bar is showing the song's position, frozen, while an ad plays on the
+  // same element. A seek here would land on the ad's timeline: the ad jumps and
+  // the song does not move, so the drag reads as broken. The embedded player
+  // refuses a seek during an ad too.
+  if (ytMode && ytMode.ad) return;
   if (ytMode) { ytSendCommand('seek', t); return; }
   try { player?.seekTo?.(t, true); } catch {}
 }
@@ -2739,6 +2755,7 @@ function updateScrubPreview(event, options = {}) {
 function beginProgressScrub(event) {
   if (event.button !== 0) return;
   if (!ytMode && (!ready || !player)) return;
+  if (ytMode && ytMode.ad) return;
   const info = progressTimeFromClientX(event.clientX);
   if (!info) return;
   event.preventDefault();
@@ -3924,6 +3941,7 @@ async function startYouTubeMode(item) {
 function stopYouTubeMode() {
   if (!ytMode) return;
   ytMode = null;
+  els.progressWrap?.classList.remove('ad-locked');
   document.body.classList.remove('yt-mode');
   if (els.ytPoster) els.ytPoster.style.backgroundImage = 'none';
   clearTimeout(ytBoundsTimer);
@@ -3949,6 +3967,8 @@ function handleYtEvent(payload) {
   if (payload.type === 'progress') {
     if (ytMode.blocked) { ytMode.blocked = false; setSubtitle(t('ytRestrictedBadge'), { sticky: true }); }
     ytMode.ready = true;
+    ytMode.ad = !!payload.ad;
+    els.progressWrap?.classList.toggle('ad-locked', !!payload.ad);
     updatePlayButtonLabel(!payload.paused);
     if (payload.ad) {
       // An ad is its own video element; showing its clock on the deck's bar

@@ -1915,6 +1915,9 @@ body.yt-mode .yt-poster {
   pointer-events: none;
 }
 body.yt-mode .progress-wrap { opacity: .75; cursor: default; }
+/* While an ad runs the bar is frozen on the song's position and cannot be
+   dragged - saying so beats swallowing the gesture silently. */
+.progress-wrap.ad-locked { opacity: .45; cursor: not-allowed; }
 body.yt-mode #statusText { color: var(--accent2); border-color: color-mix(in srgb, var(--accent2) 40%, transparent); }
 
 /* age-restricted tracks are handed to the user's own browser */

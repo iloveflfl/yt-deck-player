@@ -40,6 +40,9 @@ let ytRevealTimer = null;
 let ytViewDressed = false;
 // The deck's playback settings, kept so a freshly loaded document can be handed
 // them immediately rather than playing its first seconds at YouTube's level.
+// The video the deck asked for. Anything else showing up in the view is the
+// watch page deciding for itself, which it does at the end of a track.
+let ytWantedVideoId = null;
 let ytLastVolume = null;
 let ytLastRate = null;
 // YouTube reads and the in-deck view share one partition, kept separate from
@@ -1480,10 +1483,19 @@ const YT_VIEW_BRIDGE = `(() => {
     }
     appliedVolume = want;
   };
-  let volumeBoundTo = null;
-  const bindVolume = (v) => {
-    if (!v || volumeBoundTo === v) return;
-    volumeBoundTo = v;
+  let mediaBoundTo = null;
+  const bindMedia = (v) => {
+    if (!v || mediaBoundTo === v) return;
+    mediaBoundTo = v;
+    // The element knows it has ended before anything else does. Reported here
+    // rather than only from the poll, which can arrive after an ad has started
+    // and be discarded.
+    try {
+      v.addEventListener('ended', () => {
+        if (adShowing()) return;
+        if (lastState !== 'ended') { lastState = 'ended'; report('ended'); }
+      });
+    } catch (e) {}
     // Reacting to events rather than waiting for the next tick is what keeps the
     // correction inaudible - both across an ad boundary and at the very start,
     // where the tick alone left one frame at YouTube's own level.
@@ -1500,7 +1512,7 @@ const YT_VIEW_BRIDGE = `(() => {
   try {
     const watcher = new MutationObserver(() => {
       const v = pick();
-      if (v) bindVolume(v);
+      if (v) bindMedia(v);
     });
     watcher.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
@@ -1663,7 +1675,7 @@ const YT_VIEW_BRIDGE = `(() => {
     }
     const v = pick();
     if (!v) { if (lastState !== 'waiting') { lastState = 'waiting'; report('waiting'); } return; }
-    bindVolume(v);
+    bindMedia(v);
     syncVolume(v);
     const ad = adShowing();
     if (ad) skipAd();
@@ -1681,7 +1693,7 @@ const YT_VIEW_BRIDGE = `(() => {
     if (cmd === 'volume') {
       deckVolume = Math.min(1, Math.max(0, Number(value) / 100));
       const target = pick();
-      if (target) { target.muted = false; bindVolume(target); syncVolume(target); }
+      if (target) { target.muted = false; bindMedia(target); syncVolume(target); }
       return true;
     }
     const v = pick();
@@ -1865,6 +1877,28 @@ function ensureYtView() {
   };
   ytView.webContents.on('dom-ready', dress);
   ytView.webContents.on('did-finish-load', dress);
+  // The deck owns the queue. Left alone, the watch page follows its own autoplay
+  // at the end of a track and starts playing whatever YouTube recommends - with
+  // the deck still showing the finished track and its own queue untouched. That
+  // arrives as an in-page navigation, so will-navigate never sees it.
+  const watchedVideoId = (url) => {
+    try { return new URL(url).searchParams.get('v'); } catch { return null; }
+  };
+  const refuseWandering = (url) => {
+    const id = watchedVideoId(url);
+    if (!id || !ytWantedVideoId || id === ytWantedVideoId) return;
+    appendAppBarLog('View wandered off the queue', { wanted: ytWantedVideoId, got: id });
+    // Park first so nothing the deck did not choose is ever audible, then let
+    // the renderer move the queue on if the end report has not already.
+    parkYtView();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('yt-view-event', { type: 'ended' });
+  };
+  ytView.webContents.on('did-navigate-in-page', (_event, url) => refuseWandering(url));
+  ytView.webContents.on('did-navigate', (_event, url) => refuseWandering(url));
+  ytView.webContents.on('will-navigate', (event, url) => {
+    const id = watchedVideoId(url);
+    if (id && ytWantedVideoId && id !== ytWantedVideoId) event.preventDefault();
+  });
   ytView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   return ytView;
 }
@@ -1902,6 +1936,7 @@ ipcMain.handle('yt:play', async (_event, videoId) => {
   clearTimeout(ytIdleTimer);
   const view = ensureYtView();
   if (!view) return { ok: false, message: 'view unavailable' };
+  ytWantedVideoId = String(videoId);
   holdYtView();
   try {
     await view.webContents.loadURL(`https://www.youtube.com/watch?v=${videoId}&autoplay=1`);
@@ -1946,6 +1981,7 @@ ipcMain.handle('yt:setAdHandling', (_event, enabled) => {
 ipcMain.handle('yt:adStats', () => ({ enabled: adHandlingEnabled, blocked: adBlockCount, skipped: adSkipCount }));
 
 ipcMain.handle('yt:stop', () => {
+  ytWantedVideoId = null;
   parkYtView();
   ytViewBounds = null;
   return true;
