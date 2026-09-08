@@ -1092,48 +1092,696 @@ body.is-dock-side .empty-note {
   font-size: 9px;
 }
 
+
+/* === Blueprint: a drawing, not a set of boxes ============================ */
+html body[data-theme="blueprint"] { background-image: none; }
+html body[data-theme="blueprint"] .preview-panel,
+html body[data-theme="blueprint"] .center-panel,
+html body[data-theme="blueprint"] .chip-panel {
+  background:
+    linear-gradient(rgba(11,44,94,.055) 1px, transparent 1px) 0 0 / 100% 16px,
+    linear-gradient(90deg, rgba(11,44,94,.055) 1px, transparent 1px) 0 0 / 16px 100%,
+    rgba(244,248,253,.72);
+  border: 1px solid rgba(11,44,94,.42);
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Drafting crop marks instead of a rounded card. */
+html body[data-theme="blueprint"] .center-panel::before,
+html body[data-theme="blueprint"] .center-panel::after {
+  content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none;
+  border: 1px solid rgba(11,44,94,.75);
+}
+html body[data-theme="blueprint"] .center-panel::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+html body[data-theme="blueprint"] .center-panel::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+html body[data-theme="blueprint"] .zone-head {
+  background: transparent; color: #0b2c5e; letter-spacing: .24em;
+  border-bottom: 1px dashed rgba(11,44,94,.40);
+}
+html body[data-theme="blueprint"] .chip,
+html body[data-theme="blueprint"] .vol-box,
+html body[data-theme="blueprint"] .time-box,
+html body[data-theme="blueprint"] .speed-stepper,
+html body[data-theme="blueprint"] .tiny-btn,
+html body[data-theme="blueprint"] .mini-action {
+  background: transparent; border: 1px solid rgba(11,44,94,.40); border-radius: 0; box-shadow: none;
+}
+html body[data-theme="blueprint"] .progress-wrap { border-radius: 0; }
+html body[data-theme="blueprint"] .progress-fill { background: #0d5bd4; border-radius: 0; }
+html body[data-theme="blueprint"] .status-pill { border-radius: 0; background: transparent; letter-spacing: .18em; }
+
+/* === Cassette Deck: milled metal, so everything has an edge ============== */
+body[data-theme="cassette"] .preview-panel,
+body[data-theme="cassette"] .center-panel,
+body[data-theme="cassette"] .chip-panel {
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.030) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #34373a, #202325);
+  border: 1px solid #101214;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -2px 4px rgba(0,0,0,.55), 0 8px 18px rgba(0,0,0,.5);
+}
+body[data-theme="cassette"] .zone-head {
+  background: linear-gradient(180deg, #3a3d40, #26292b); color: #cfd6da;
+  letter-spacing: .18em; border-bottom: 1px solid #121416;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+}
+body[data-theme="cassette"] .chip,
+body[data-theme="cassette"] .tiny-btn,
+body[data-theme="cassette"] .mini-action,
+body[data-theme="cassette"] .speed-stepper,
+body[data-theme="cassette"] .vol-box,
+body[data-theme="cassette"] .time-box {
+  background: linear-gradient(180deg, #43474a, #2a2d30);
+  border: 1px solid #14171a; border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.20), 0 2px 0 #0e1012;
+  color: #e2e0da;
+}
+body[data-theme="cassette"] .tiny-btn:active,
+body[data-theme="cassette"] .mini-action:active { box-shadow: inset 0 2px 4px rgba(0,0,0,.6); transform: translateY(1px); }
+/* The transport window: an amber lamp behind smoked plastic. */
+body[data-theme="cassette"] .status-pill {
+  background: linear-gradient(180deg, rgba(247,127,0,.24), rgba(247,127,0,.10));
+  border: 1px solid #0e1012; border-radius: 2px; color: #ffb457;
+  text-shadow: 0 0 8px rgba(247,127,0,.7); letter-spacing: .2em;
+  box-shadow: inset 0 0 10px rgba(247,127,0,.28);
+}
+body[data-theme="cassette"] .progress-wrap {
+  background: #101214; box-shadow: inset 0 2px 5px rgba(0,0,0,.75); border-radius: 2px;
+}
+body[data-theme="cassette"] .progress-fill { background: linear-gradient(180deg, #ffa73d, #d96a00); border-radius: 1px; }
+
+/* === Stained Glass: lead came holds every pane =========================== */
+body[data-theme="stainedglass"] .preview-panel,
+body[data-theme="stainedglass"] .center-panel,
+body[data-theme="stainedglass"] .chip-panel {
+  background: linear-gradient(160deg, rgba(16,28,56,.96), rgba(4,7,15,.97));
+  border: 3px solid #05070c;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(31,143,214,.30), inset 0 0 30px rgba(31,143,214,.10);
+}
+body[data-theme="stainedglass"] .chip {
+  border: 3px solid #05070c; border-radius: 6px;
+  background: linear-gradient(150deg, rgba(31,143,214,.20), rgba(198,33,52,.16));
+  box-shadow: inset 0 0 18px rgba(31,143,214,.16);
+}
+body[data-theme="stainedglass"] .zone-head {
+  color: #ffd98a; letter-spacing: .16em; border-bottom: 3px solid #05070c;
+  background: linear-gradient(90deg, rgba(198,33,52,.22), transparent);
+}
+body[data-theme="stainedglass"] .track-title { text-shadow: 0 0 18px rgba(255,217,138,.35); }
+body[data-theme="stainedglass"] .tiny-btn,
+body[data-theme="stainedglass"] .mini-action,
+body[data-theme="stainedglass"] .vol-box,
+body[data-theme="stainedglass"] .time-box,
+body[data-theme="stainedglass"] .speed-stepper {
+  border: 2px solid #05070c; border-radius: 4px; background: rgba(10,18,36,.86);
+}
+body[data-theme="stainedglass"] .progress-wrap { border: 2px solid #05070c; border-radius: 3px; }
+body[data-theme="stainedglass"] .progress-fill { background: linear-gradient(90deg, #1f8fd6, #2f9e6a, #c62134); }
+
+/* === Zen Ma: the interface waits until you reach for it =================== */
+html body[data-theme="zenma"] .preview-panel,
+html body[data-theme="zenma"] .center-panel,
+html body[data-theme="zenma"] .chip-panel {
+  background: rgba(250,246,238,.86);
+  border: 0; border-radius: 0; box-shadow: none;
+}
+html body[data-theme="zenma"] .zone-head {
+  background: transparent; border-bottom: 0; color: #8b8677;
+  letter-spacing: .38em; font-size: 9px;
+}
+/* The secondary controls sit back until the pointer arrives; play/pause and
+   skip stay at full strength, because hunting for the primary action is not
+   restful, it is annoying. */
+html body[data-theme="zenma"] .vol-box,
+html body[data-theme="zenma"] .opacity-box,
+html body[data-theme="zenma"] .speed-stepper,
+html body[data-theme="zenma"] .time-box,
+html body[data-theme="zenma"] .top-actions {
+  opacity: .34;
+  transition: opacity .45s ease;
+}
+html body[data-theme="zenma"] .center-panel:hover .vol-box,
+html body[data-theme="zenma"] .center-panel:hover .opacity-box,
+html body[data-theme="zenma"] .center-panel:hover .speed-stepper,
+html body[data-theme="zenma"] .center-panel:hover .time-box,
+html body[data-theme="zenma"] .deck-topline:hover .top-actions { opacity: 1; }
+html body[data-theme="zenma"] .track-title { letter-spacing: .04em; font-weight: 600; }
+html body[data-theme="zenma"] .chip,
+html body[data-theme="zenma"] .tiny-btn,
+html body[data-theme="zenma"] .mini-action,
+html body[data-theme="zenma"] .vol-box,
+html body[data-theme="zenma"] .time-box,
+html body[data-theme="zenma"] .speed-stepper {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
+html body[data-theme="zenma"] .chip { border-bottom: 1px solid rgba(58,55,48,.16); }
+html body[data-theme="zenma"] .progress-wrap { background: rgba(58,55,48,.10); border-radius: 0; }
+html body[data-theme="zenma"] .progress-fill { background: #3a3730; border-radius: 0; }
+html body[data-theme="zenma"] .progress-knob { background: #c4622a; box-shadow: none; }
+html body[data-theme="zenma"] .status-pill { background: transparent; border-color: transparent; color: #8b8677; letter-spacing: .3em; }
+
+/* === Comic Pop: inked outlines and a hard shadow ========================= */
+html body[data-theme="comicpop"] .preview-panel,
+html body[data-theme="comicpop"] .center-panel,
+html body[data-theme="comicpop"] .chip-panel {
+  background: #fffdf6;
+  border: 3px solid #0a0a0a;
+  border-radius: 10px;
+  box-shadow: 6px 6px 0 #0a0a0a;
+}
+html body[data-theme="comicpop"] .chip-panel {
+  background-image: radial-gradient(#0a0a0a 1.1px, transparent 1.3px);
+  background-size: 7px 7px;
+}
+html body[data-theme="comicpop"] .zone-head {
+  background: #f5c400; color: #0a0a0a; border-bottom: 3px solid #0a0a0a;
+  letter-spacing: .14em; font-weight: 900;
+}
+html body[data-theme="comicpop"] .chip,
+html body[data-theme="comicpop"] .tiny-btn,
+html body[data-theme="comicpop"] .mini-action,
+html body[data-theme="comicpop"] .vol-box,
+html body[data-theme="comicpop"] .time-box,
+html body[data-theme="comicpop"] .speed-stepper {
+  background: #ffffff; border: 2.5px solid #0a0a0a; border-radius: 7px;
+  box-shadow: 3px 3px 0 #0a0a0a; font-weight: 800;
+}
+html body[data-theme="comicpop"] .tiny-btn:active,
+html body[data-theme="comicpop"] .mini-action:active { transform: translate(3px, 3px); box-shadow: 0 0 0 #0a0a0a; }
+html body[data-theme="comicpop"] .track-title { font-weight: 900; letter-spacing: -.01em; }
+html body[data-theme="comicpop"] .progress-wrap { border: 2.5px solid #0a0a0a; border-radius: 7px; background: #fff; }
+html body[data-theme="comicpop"] .progress-fill { background: #e01b1b; }
+html body[data-theme="comicpop"] .status-pill { background: #e01b1b; color: #fff; border: 2.5px solid #0a0a0a; font-weight: 900; }
+
+/* === Aqua Gel: poured, lit from above ==================================== */
+html body[data-theme="aquagel"] .preview-panel,
+html body[data-theme="aquagel"] .center-panel,
+html body[data-theme="aquagel"] .chip-panel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.80) 0%, rgba(255,255,255,.34) 46%, rgba(191,232,246,.52) 100%);
+  border: 1px solid rgba(255,255,255,.85);
+  border-radius: 18px;
+  box-shadow: 0 10px 26px rgba(0,110,150,.20), inset 0 1px 0 rgba(255,255,255,.95);
+  backdrop-filter: blur(6px);
+}
+html body[data-theme="aquagel"] .zone-head {
+  background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(215,242,251,.62));
+  color: #0a5c78; border-bottom: 1px solid rgba(255,255,255,.9); border-radius: 14px 14px 0 0;
+}
+html body[data-theme="aquagel"] .chip,
+html body[data-theme="aquagel"] .tiny-btn,
+html body[data-theme="aquagel"] .mini-action,
+html body[data-theme="aquagel"] .vol-box,
+html body[data-theme="aquagel"] .time-box,
+html body[data-theme="aquagel"] .speed-stepper {
+  background: linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(214,242,252,.72) 52%, rgba(160,222,242,.72) 100%);
+  border: 1px solid rgba(255,255,255,.9); border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 3px 8px rgba(0,110,150,.18);
+  color: #093344;
+}
+html body[data-theme="aquagel"] .chip { border-radius: 16px; }
+html body[data-theme="aquagel"] .progress-wrap {
+  border-radius: 999px; background: rgba(255,255,255,.62);
+  box-shadow: inset 0 2px 4px rgba(0,110,150,.22);
+}
+html body[data-theme="aquagel"] .progress-fill {
+  background: linear-gradient(180deg, #7fe6f6, #00a6d6);
+  border-radius: 999px; box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+}
+html body[data-theme="aquagel"] .status-pill {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(0,166,214,.22));
+  border-color: rgba(255,255,255,.9); color: #06617e;
+}
+
+/* --- Mochi Mochi: matte surfaces, no shadows, everything squishes -------- */
+html body[data-theme="mochi"] .preview-panel,
+html body[data-theme="mochi"] .center-panel,
+html body[data-theme="mochi"] .chip-panel {
+  background: linear-gradient(180deg, rgba(255,253,252,.96), rgba(246,236,233,.96));
+  border: 1px solid rgba(208,119,140,.16);
+  border-radius: 22px;
+  box-shadow: none;
+}
+html body[data-theme="mochi"] .zone-head {
+  background: transparent; color: #a3697a;
+  border-bottom: 1px dashed rgba(208,119,140,.30);
+  border-radius: 20px 20px 0 0;
+}
+html body[data-theme="mochi"] .chip,
+html body[data-theme="mochi"] .tiny-btn,
+html body[data-theme="mochi"] .mini-action,
+html body[data-theme="mochi"] .deck-btn,
+html body[data-theme="mochi"] .vol-box,
+html body[data-theme="mochi"] .time-box,
+html body[data-theme="mochi"] .speed-stepper {
+  background: rgba(255,250,249,.94);
+  border: 1px solid rgba(208,119,140,.20);
+  border-radius: 999px;
+  box-shadow: none;
+  transition: transform 140ms cubic-bezier(.34,1.56,.64,1), background 140ms ease;
+}
+html body[data-theme="mochi"] .chip { border-radius: 18px; }
+html body[data-theme="mochi"] .deck-btn:active,
+html body[data-theme="mochi"] .tiny-btn:active,
+html body[data-theme="mochi"] .mini-action:active { transform: scale(.93); }
+html body[data-theme="mochi"] .deck-btn.primary {
+  background: linear-gradient(180deg, #eaa8b8, #d0778c); color: #fff; border-color: transparent;
+}
+html body[data-theme="mochi"] .progress-wrap { border-radius: 999px; background: rgba(208,119,140,.12); }
+html body[data-theme="mochi"] .progress-fill { background: linear-gradient(90deg, #f0bccb, #d0778c); border-radius: 999px; }
+html body[data-theme="mochi"] .status-pill {
+  border-radius: 999px; background: rgba(208,119,140,.14);
+  border-color: rgba(208,119,140,.26); color: #a3576c;
+}
+
+/* --- Brown Sugar Boba: warm, with tapioca pearls in the track ------------ */
+body[data-theme="boba"] .preview-panel,
+body[data-theme="boba"] .center-panel,
+body[data-theme="boba"] .chip-panel {
+  background: linear-gradient(180deg, rgba(58,37,25,.93), rgba(28,18,12,.95));
+  border: 1px solid rgba(224,164,92,.22);
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45);
+}
+body[data-theme="boba"] .zone-head {
+  background: linear-gradient(180deg, rgba(224,164,92,.20), rgba(224,164,92,0));
+  color: #f0d3a8; border-bottom: 1px solid rgba(224,164,92,.22);
+  border-radius: 16px 16px 0 0;
+}
+body[data-theme="boba"] .chip,
+body[data-theme="boba"] .tiny-btn,
+body[data-theme="boba"] .mini-action,
+body[data-theme="boba"] .vol-box,
+body[data-theme="boba"] .time-box,
+body[data-theme="boba"] .speed-stepper {
+  background: linear-gradient(180deg, rgba(92,60,38,.70), rgba(58,36,22,.78));
+  border: 1px solid rgba(224,164,92,.24);
+  border-radius: 999px;
+}
+body[data-theme="boba"] .chip { border-radius: 16px; }
+body[data-theme="boba"] .progress-wrap {
+  border-radius: 999px;
+  background-color: rgba(243,222,190,.10);
+  background-image: radial-gradient(circle at 8px 50%, rgba(38,22,12,.85) 0 3.2px, rgba(38,22,12,0) 4.2px);
+  background-size: 16px 100%;
+  background-repeat: repeat-x;
+}
+body[data-theme="boba"] .progress-fill { background: linear-gradient(90deg, #f3ddb8, #e0a45c); border-radius: 999px; }
+body[data-theme="boba"] .deck-btn.primary {
+  background: linear-gradient(180deg, #f0c184, #c9813a); color: #2b1a0e; border-color: transparent;
+}
+body[data-theme="boba"] .status-pill {
+  border-radius: 999px; background: rgba(224,164,92,.18);
+  border-color: rgba(224,164,92,.32); color: #f3ddb8;
+}
+
+/* --- Penguin Cafe: tuxedo headers, buttons waddle on hover --------------- */
+html body[data-theme="penguin"] .preview-panel,
+html body[data-theme="penguin"] .center-panel,
+html body[data-theme="penguin"] .chip-panel {
+  background: #ffffff;
+  border: 1px solid #d3e3e1;
+  border-radius: 16px;
+  box-shadow: 0 2px 0 #dceceb;
+}
+html body[data-theme="penguin"] .zone-head {
+  background: #2b3a44; color: #eef7f6;
+  border-bottom: none; border-radius: 14px 14px 0 0;
+}
+html body[data-theme="penguin"] .zone-head .muted { color: #a8bfc6; }
+html body[data-theme="penguin"] .zone-head .mini-action {
+  color: #eef7f6; background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.24);
+}
+html body[data-theme="penguin"] .zone-head .mini-action svg { fill: currentColor; }
+html body[data-theme="penguin"] .zone-head .mini-action.accent { color: #23303a; }
+html body[data-theme="penguin"] .chip,
+html body[data-theme="penguin"] .tiny-btn,
+html body[data-theme="penguin"] .mini-action,
+html body[data-theme="penguin"] .vol-box,
+html body[data-theme="penguin"] .time-box,
+html body[data-theme="penguin"] .speed-stepper {
+  background: #fff; border: 1px solid #d3e3e1; border-radius: 12px;
+  box-shadow: 0 1px 0 #dceceb; transition: transform 160ms ease;
+}
+html body[data-theme="penguin"] .tiny-btn:hover,
+html body[data-theme="penguin"] .mini-action:hover { transform: rotate(-2deg); }
+html body[data-theme="penguin"] .chip:hover { transform: translateY(-1px); }
+html body[data-theme="penguin"] .deck-btn.primary { background: #2b3a44; border-color: #2b3a44; color: #fff; }
+html body[data-theme="penguin"] .progress-wrap { border-radius: 999px; background: #dceceb; }
+html body[data-theme="penguin"] .progress-fill { background: linear-gradient(90deg, #ff9d70, #ff7a45); border-radius: 999px; }
+html body[data-theme="penguin"] .status-pill { background: #2b3a44; border-color: #2b3a44; color: #eef7f6; border-radius: 999px; }
+
+/* --- Cloud Soda: puffy panels that float on hover ------------------------ */
+html body[data-theme="cloudsoda"] .preview-panel,
+html body[data-theme="cloudsoda"] .center-panel,
+html body[data-theme="cloudsoda"] .chip-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(238,245,255,.92));
+  border: 1px solid rgba(255,255,255,.92);
+  border-radius: 24px;
+  box-shadow: 0 10px 26px rgba(110,150,220,.20);
+}
+html body[data-theme="cloudsoda"] .zone-head {
+  background: transparent; color: #5a6f9e;
+  border-bottom: 1px solid rgba(91,143,224,.22);
+  border-radius: 22px 22px 0 0;
+}
+html body[data-theme="cloudsoda"] .chip,
+html body[data-theme="cloudsoda"] .tiny-btn,
+html body[data-theme="cloudsoda"] .mini-action,
+html body[data-theme="cloudsoda"] .vol-box,
+html body[data-theme="cloudsoda"] .time-box,
+html body[data-theme="cloudsoda"] .speed-stepper {
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(255,255,255,.95);
+  border-radius: 999px;
+  box-shadow: 0 3px 8px rgba(110,150,220,.16);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+html body[data-theme="cloudsoda"] .chip { border-radius: 18px; }
+html body[data-theme="cloudsoda"] .chip:hover,
+html body[data-theme="cloudsoda"] .tiny-btn:hover,
+html body[data-theme="cloudsoda"] .mini-action:hover {
+  transform: translateY(-2px); box-shadow: 0 8px 16px rgba(110,150,220,.24);
+}
+html body[data-theme="cloudsoda"] .deck-btn.primary {
+  background: linear-gradient(180deg, #8fb4f0, #5b8fe0); color: #fff; border-color: transparent;
+}
+html body[data-theme="cloudsoda"] .progress-wrap { border-radius: 999px; background: rgba(255,255,255,.75); }
+html body[data-theme="cloudsoda"] .progress-fill { background: linear-gradient(90deg, #a8c8f7, #5b8fe0); border-radius: 999px; }
+html body[data-theme="cloudsoda"] .status-pill {
+  border-radius: 999px; background: rgba(232,169,46,.16);
+  border-color: rgba(232,169,46,.34); color: #8a6412;
+}
+
+/* --- Velvet Kuro: dark velvet, magenta glow instead of highlights -------- */
+body[data-theme="velvetkuro"] .preview-panel,
+body[data-theme="velvetkuro"] .center-panel,
+body[data-theme="velvetkuro"] .chip-panel {
+  background: linear-gradient(180deg, rgba(40,22,72,.92), rgba(14,8,28,.95));
+  border: 1px solid rgba(220,176,255,.20);
+  border-radius: 18px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.55), inset 0 1px 0 rgba(220,176,255,.12);
+}
+body[data-theme="velvetkuro"] .zone-head {
+  background: linear-gradient(180deg, rgba(255,95,162,.16), rgba(255,95,162,0));
+  color: #f0cfe6; border-bottom: 1px solid rgba(255,95,162,.22);
+  border-radius: 16px 16px 0 0;
+}
+body[data-theme="velvetkuro"] .chip,
+body[data-theme="velvetkuro"] .tiny-btn,
+body[data-theme="velvetkuro"] .mini-action,
+body[data-theme="velvetkuro"] .vol-box,
+body[data-theme="velvetkuro"] .time-box,
+body[data-theme="velvetkuro"] .speed-stepper {
+  background: rgba(44,26,72,.72);
+  border: 1px solid rgba(220,176,255,.20);
+  border-radius: 14px;
+  transition: box-shadow 160ms ease;
+}
+body[data-theme="velvetkuro"] .chip:hover,
+body[data-theme="velvetkuro"] .tiny-btn:hover,
+body[data-theme="velvetkuro"] .mini-action:hover {
+  box-shadow: 0 0 0 1px rgba(255,95,162,.45), 0 0 14px rgba(255,95,162,.26);
+}
+body[data-theme="velvetkuro"] .deck-btn.primary {
+  background: linear-gradient(180deg, #ff7fb6, #e0347f); color: #fff; border-color: transparent;
+  box-shadow: 0 0 16px rgba(255,95,162,.35);
+}
+body[data-theme="velvetkuro"] .progress-wrap { border-radius: 999px; background: rgba(220,176,255,.14); }
+body[data-theme="velvetkuro"] .progress-fill {
+  background: linear-gradient(90deg, #dcb0ff, #ff5fa2); border-radius: 999px;
+  box-shadow: 0 0 10px rgba(255,95,162,.45);
+}
+body[data-theme="velvetkuro"] .status-pill {
+  border-radius: 999px; background: rgba(255,95,162,.16);
+  border-color: rgba(255,95,162,.34); color: #ffb8d8;
+}
+
+/* --- Theme gallery ------------------------------------------------------- */
+/* settings-form is a multi-column grid; the gallery is one column of its own
+   so the header, the grid and the actions stack instead of sitting side by side. */
+.theme-gallery-form { display: block; }
+.theme-gallery-form .tg-head { margin-bottom: 8px; }
+.theme-gallery-form .settings-actions { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; }
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  max-height: 46vh;
+  overflow: auto;
+  padding: 2px;
+}
+.tg-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  padding: 6px; border-radius: 10px; cursor: pointer; text-align: left;
+  background: color-mix(in srgb, var(--panel2) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  transition: transform .12s ease, border-color .12s ease;
+}
+.tg-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.tg-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.tg-face {
+  position: relative; display: block; height: 54px; border-radius: 7px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.22);
+}
+.tg-art { position: absolute; inset: 0; background-size: cover; background-position: left center; opacity: .5; }
+.tg-panel { position: absolute; left: 7px; right: 7px; bottom: 7px; height: 20px; border-radius: 4px; opacity: .92; }
+.tg-bar { position: absolute; left: 11px; width: 44%; bottom: 13px; height: 4px; border-radius: 3px; }
+.tg-dot { position: absolute; right: 10px; top: 9px; width: 9px; height: 9px; border-radius: 50%; }
+.tg-adaptive { display: grid; place-items: center; background: repeating-linear-gradient(135deg, #2b2f3a 0 8px, #1d2029 8px 16px); }
+.tg-auto { font-size: 10px; font-weight: 900; letter-spacing: .16em; color: #cfd6e4; }
+.tg-name { font-size: 10.5px; font-weight: 800; line-height: 1.2; color: var(--text); }
+.tg-now { font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
+
+/* --- CRT Phosphor: one colour, and the tube it came out of --------------- */
+body[data-theme="crtphosphor"] .preview-panel,
+body[data-theme="crtphosphor"] .center-panel,
+body[data-theme="crtphosphor"] .chip-panel {
+  background: #050d07;
+  border-color: rgba(96,216,120,.22);
+  box-shadow: inset 0 0 40px rgba(96,216,120,.05), 0 0 0 1px rgba(96,216,120,.10);
+}
+body[data-theme="crtphosphor"] .center-panel::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: repeating-linear-gradient(180deg, rgba(96,216,120,.055) 0 1px, transparent 1px 3px);
+}
+body[data-theme="crtphosphor"] .track-title,
+body[data-theme="crtphosphor"] .status-pill,
+body[data-theme="crtphosphor"] #deckClock { text-shadow: 0 0 6px rgba(96,216,120,.55); }
+body[data-theme="crtphosphor"] .status-pill,
+body[data-theme="crtphosphor"] .zone-head { letter-spacing: .16em; }
+body[data-theme="crtphosphor"] .chip,
+body[data-theme="crtphosphor"] .vol-box,
+body[data-theme="crtphosphor"] .time-box,
+body[data-theme="crtphosphor"] .speed-stepper {
+  background: #030a05; border-color: rgba(96,216,120,.24); color: #8ef0a4;
+}
+body[data-theme="crtphosphor"] .progress-fill { background: #60d878; box-shadow: 0 0 10px rgba(96,216,120,.6); }
+
+/* --- Riso Press: two inks on paper, printed flat ------------------------- */
+html body[data-theme="risopress"] .preview-panel,
+html body[data-theme="risopress"] .center-panel,
+html body[data-theme="risopress"] .chip-panel {
+  background: #fdfcf6;
+  border: 2px solid #141414;
+  border-radius: 3px;
+  box-shadow: 5px 5px 0 rgba(20,20,20,.92);
+}
+html body[data-theme="risopress"] .chip-panel {
+  background-image: radial-gradient(rgba(20,20,20,.14) 1px, transparent 1.2px);
+  background-size: 5px 5px;
+}
+html body[data-theme="risopress"] .zone-head {
+  background: #141414; color: #f4f1e6; border-bottom: 0; letter-spacing: .1em;
+}
+html body[data-theme="risopress"] .chip,
+html body[data-theme="risopress"] .vol-box,
+html body[data-theme="risopress"] .time-box,
+html body[data-theme="risopress"] .speed-stepper,
+html body[data-theme="risopress"] .tiny-btn,
+html body[data-theme="risopress"] .mini-action {
+  background: #fffdf7; border: 1.5px solid #141414; border-radius: 4px; box-shadow: 2px 2px 0 rgba(20,20,20,.85);
+}
+html body[data-theme="risopress"] .progress-fill { background: #f03000; }
+html body[data-theme="risopress"] .status-pill { background: #f03000; color: #fffdf7; border-color: #141414; }
+
+/* --- Neon Arcade: everything is a light source --------------------------- */
+body[data-theme="neonarcade"] .preview-panel,
+body[data-theme="neonarcade"] .center-panel,
+body[data-theme="neonarcade"] .chip-panel {
+  background: linear-gradient(180deg, rgba(26,3,74,.86), rgba(9,0,30,.94));
+  border-color: rgba(255,47,208,.34);
+  box-shadow: 0 0 22px rgba(255,47,208,.16), inset 0 0 26px rgba(34,231,255,.07);
+}
+body[data-theme="neonarcade"] .chip-panel {
+  background-image:
+    linear-gradient(rgba(34,231,255,.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,231,255,.10) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(26,3,74,.86), rgba(9,0,30,.94));
+  background-size: 26px 26px, 26px 26px, auto;
+}
+body[data-theme="neonarcade"] .track-title { text-shadow: 0 0 12px rgba(255,47,208,.55); }
+body[data-theme="neonarcade"] .zone-head { color: #22e7ff; text-shadow: 0 0 8px rgba(34,231,255,.5); }
+body[data-theme="neonarcade"] .chip { background: rgba(24,3,66,.78); border-color: rgba(34,231,255,.26); }
+body[data-theme="neonarcade"] .chip.playing,
+body[data-theme="neonarcade"] .chip.active { box-shadow: 0 0 16px rgba(255,47,208,.42); border-color: rgba(255,47,208,.62); }
+body[data-theme="neonarcade"] .progress-fill { background: linear-gradient(90deg, #22e7ff, #ff2fd0); box-shadow: 0 0 12px rgba(255,47,208,.55); }
+
+/* --- Sumi Ink: hairlines and air, nothing else --------------------------- */
+html body[data-theme="sumiink"] .preview-panel,
+html body[data-theme="sumiink"] .center-panel,
+html body[data-theme="sumiink"] .chip-panel {
+  background: #fffefb;
+  border: 1px solid rgba(20,18,16,.16);
+  box-shadow: none;
+  border-radius: 4px;
+}
+html body[data-theme="sumiink"] .zone-head {
+  background: transparent; color: #141210; border-bottom: 1px solid rgba(20,18,16,.14); letter-spacing: .22em;
+}
+html body[data-theme="sumiink"] .chip,
+html body[data-theme="sumiink"] .vol-box,
+html body[data-theme="sumiink"] .time-box,
+html body[data-theme="sumiink"] .speed-stepper {
+  background: #fffefb; border: 1px solid rgba(20,18,16,.14); border-radius: 3px; box-shadow: none;
+}
+html body[data-theme="sumiink"] .track-title { letter-spacing: .01em; }
+html body[data-theme="sumiink"] .progress-fill { background: #141210; }
+html body[data-theme="sumiink"] .progress-knob { background: #b0210f; }
+html body[data-theme="sumiink"] .status-pill { background: transparent; color: #b0210f; border-color: rgba(176,33,15,.45); }
+
+/* --- Woodblock Fall: carved blocks, flat colour -------------------------- */
+html body[data-theme="woodblockfall"] .preview-panel,
+html body[data-theme="woodblockfall"] .center-panel,
+html body[data-theme="woodblockfall"] .chip-panel {
+  background: #fdf7e9;
+  border: 1.5px solid rgba(59,42,28,.55);
+  box-shadow: 0 3px 0 rgba(59,42,28,.28);
+}
+html body[data-theme="woodblockfall"] .chip-panel {
+  background-image: repeating-linear-gradient(92deg, rgba(120,96,72,.07) 0 2px, transparent 2px 7px);
+}
+html body[data-theme="woodblockfall"] .zone-head {
+  background: rgba(210,98,42,.14); color: #6b3a1c; border-bottom-color: rgba(59,42,28,.28); letter-spacing: .12em;
+}
+html body[data-theme="woodblockfall"] .chip {
+  background: #fbf3e2; border: 1.5px solid rgba(59,42,28,.42); box-shadow: 0 2px 0 rgba(59,42,28,.22);
+}
+html body[data-theme="woodblockfall"] .progress-fill { background: linear-gradient(90deg, #7a7f46, #d2622a); }
+html body[data-theme="woodblockfall"] .status-pill { background: rgba(210,98,42,.16); border-color: rgba(210,98,42,.48); color: #a8431a; }
+
+/* --- Tidepool: black water, light only where something moves ------------- */
+body[data-theme="tidepool"] .preview-panel,
+body[data-theme="tidepool"] .center-panel,
+body[data-theme="tidepool"] .chip-panel {
+  background: radial-gradient(120% 90% at 12% 0%, rgba(4,30,34,.92), rgba(0,5,8,.97));
+  border-color: rgba(46,240,168,.14);
+  box-shadow: 0 20px 50px rgba(0,0,0,.7);
+}
+body[data-theme="tidepool"] .zone-head { color: #8fe8cd; border-bottom-color: rgba(46,240,168,.14); }
+body[data-theme="tidepool"] .chip { background: rgba(1,14,18,.84); border-color: rgba(46,240,168,.14); }
+body[data-theme="tidepool"] .chip.playing,
+body[data-theme="tidepool"] .chip.active {
+  border-color: rgba(46,240,168,.52);
+  box-shadow: 0 0 20px rgba(46,240,168,.28);
+}
+body[data-theme="tidepool"] .track-title { text-shadow: 0 0 16px rgba(46,240,168,.30); }
+body[data-theme="tidepool"] .progress-fill { background: linear-gradient(90deg, #2ef0a8, #9ee34a); box-shadow: 0 0 14px rgba(46,240,168,.45); }
+body[data-theme="tidepool"] .status-pill { background: rgba(46,240,168,.10); border-color: rgba(46,240,168,.34); }
+
+/* Dusk Tape: the window at dusk, so the panels read as glass over a city and
+   the amber is treated as a light source rather than a flat accent colour. */
+body[data-theme="dusktape"] .preview-panel,
+body[data-theme="dusktape"] .center-panel,
+body[data-theme="dusktape"] .chip-panel {
+  background: linear-gradient(180deg, rgba(16,36,47,.90), rgba(7,18,25,.94));
+  border-color: rgba(95,182,200,.16);
+  box-shadow: 0 18px 44px rgba(2,8,12,.55), 0 0 0 1px rgba(248,147,15,.10);
+}
+body[data-theme="dusktape"] .chip-panel {
+  background:
+    radial-gradient(circle at 82% 8%, rgba(248,147,15,.13), transparent 42%),
+    linear-gradient(180deg, rgba(16,36,47,.90), rgba(7,18,25,.94));
+}
+body[data-theme="dusktape"] .chip-zone { background: rgba(6,16,22,.55); }
+body[data-theme="dusktape"] .zone-head {
+  color: #cfe4e9;
+  background: linear-gradient(90deg, rgba(13,31,41,.88), rgba(9,22,30,.62));
+  border-bottom-color: rgba(95,182,200,.14);
+}
+body[data-theme="dusktape"] .vol-box,
+body[data-theme="dusktape"] .opacity-box,
+body[data-theme="dusktape"] .speed-stepper,
+body[data-theme="dusktape"] .time-box {
+  background: rgba(7,19,26,.72);
+  border-color: rgba(95,182,200,.18);
+  color: #bcd2d8;
+}
+body[data-theme="dusktape"] .chip {
+  background: linear-gradient(135deg, rgba(18,40,52,.86), rgba(9,22,30,.72));
+  border-color: rgba(95,182,200,.20);
+  box-shadow: inset 0 1px 0 rgba(198,232,240,.06), 0 8px 18px rgba(2,8,12,.44);
+}
+body[data-theme="dusktape"] .chip-sub { color: #8fa6ad; }
+/* The glow is the headphone in the artwork: it belongs on whatever is playing. */
+body[data-theme="dusktape"] .chip.playing,
+body[data-theme="dusktape"] .chip.active {
+  border-color: rgba(248,147,15,.42);
+  box-shadow: 0 0 0 1px rgba(248,147,15,.22), 0 8px 22px rgba(248,147,15,.16);
+}
+body[data-theme="dusktape"] .progress-fill {
+  background: linear-gradient(90deg, #5fb6c8, #f8930f);
+}
+body[data-theme="dusktape"] .status-pill {
+  background: rgba(248,147,15,.10);
+  border-color: rgba(248,147,15,.30);
+}
+
 /* v2.6: Ribbon Candy should feel white/pink, not gray */
-body[data-theme="ribboncandy"] .chip-panel,
-body[data-theme="ribboncandy"] .chip-zone,
-body[data-theme="ribboncandy"] .center-panel,
-body[data-theme="ribboncandy"] .preview-panel {
+html body[data-theme="ribboncandy"] .chip-panel,
+html body[data-theme="ribboncandy"] .chip-zone,
+html body[data-theme="ribboncandy"] .center-panel,
+html body[data-theme="ribboncandy"] .preview-panel {
   background: rgba(255, 252, 255, 0.92);
   border-color: rgba(213, 90, 199, 0.20);
   box-shadow: 0 12px 28px rgba(213, 90, 199, 0.13), 0 0 0 1px rgba(255,255,255,.62);
 }
-body[data-theme="ribboncandy"] .chip-panel {
+html body[data-theme="ribboncandy"] .chip-panel {
   background:
     radial-gradient(circle at 20% 20%, rgba(124,200,255,.16), transparent 34%),
     linear-gradient(180deg, rgba(255,255,255,.93), rgba(255,239,248,.93));
 }
-body[data-theme="ribboncandy"] .chip-zone {
+html body[data-theme="ribboncandy"] .chip-zone {
   background: rgba(255,255,255,.72);
 }
-body[data-theme="ribboncandy"] .zone-head {
+html body[data-theme="ribboncandy"] .zone-head {
   color: #9b438f;
   background: linear-gradient(90deg, rgba(255,255,255,.86), rgba(255,229,244,.78));
   border-bottom-color: rgba(213,90,199,.15);
 }
-body[data-theme="ribboncandy"] .vol-box,
-body[data-theme="ribboncandy"] .opacity-box,
-body[data-theme="ribboncandy"] .speed-stepper,
-body[data-theme="ribboncandy"] .time-box {
+html body[data-theme="ribboncandy"] .vol-box,
+html body[data-theme="ribboncandy"] .opacity-box,
+html body[data-theme="ribboncandy"] .speed-stepper,
+html body[data-theme="ribboncandy"] .time-box {
   background: rgba(255,255,255,.78);
   border-color: rgba(213,90,199,.18);
   color: #8e5c88;
 }
-body[data-theme="ribboncandy"] .chip {
+html body[data-theme="ribboncandy"] .chip {
   background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,229,244,.64));
   border-color: rgba(213,90,199,.22);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.74), 0 7px 16px rgba(213,90,199,.10);
 }
-body[data-theme="ribboncandy"] .chip-thumb::after {
+html body[data-theme="ribboncandy"] .chip-thumb::after {
   background: linear-gradient(90deg, rgba(255,252,255,.84), rgba(255,241,248,.32));
 }
-body[data-theme="ribboncandy"] .chip-sub {
+html body[data-theme="ribboncandy"] .chip-sub {
   color: #9b6b94;
 }
-body[data-theme="ribboncandy"] input[type="range"] {
+html body[data-theme="ribboncandy"] input[type="range"] {
   accent-color: #d55ac7;
 }
 
@@ -1141,8 +1789,8 @@ body[data-theme="ribboncandy"] input[type="range"] {
 .deck-btn, .mode-btn {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 15px rgba(0,0,0,0.15);
 }
-body[data-theme="ribboncandy"] .deck-btn,
-body[data-theme="ribboncandy"] .mode-btn {
+html body[data-theme="ribboncandy"] .deck-btn,
+html body[data-theme="ribboncandy"] .mode-btn {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 5px 13px rgba(213,90,199,0.12);
 }
 
@@ -1274,24 +1922,24 @@ body[data-theme="crayonnight"] .deck-topline {
 body[data-theme="crayonnight"] .progress-knob:not(.custom-image) { background-color: #fdf3c0; box-shadow: 0 0 14px rgba(247,220,92,.7); }
 
 /* Crayon Pastel Bloom: pink cotton card with gold flourish */
-body[data-theme="crayonbloom"] .zone-head {
+html body[data-theme="crayonbloom"] .zone-head {
   background: linear-gradient(90deg, rgba(255,255,255,.9), rgba(255,228,240,.8));
   color: #a04a82;
 }
-body[data-theme="crayonbloom"] .deck-btn.primary { color: #fff; }
-body[data-theme="crayonbloom"] .chip::after { background: linear-gradient(90deg, #f06fa8, #e8b64c, #7cc3ea); }
-body[data-theme="crayonbloom"] .progress-fill { background: linear-gradient(90deg, #f06fa8, #e8b64c); }
-body[data-theme="crayonbloom"] input[type="range"] { accent-color: #f06fa8; }
+html body[data-theme="crayonbloom"] .deck-btn.primary { color: #fff; }
+html body[data-theme="crayonbloom"] .chip::after { background: linear-gradient(90deg, #f06fa8, #e8b64c, #7cc3ea); }
+html body[data-theme="crayonbloom"] .progress-fill { background: linear-gradient(90deg, #f06fa8, #e8b64c); }
+html body[data-theme="crayonbloom"] input[type="range"] { accent-color: #f06fa8; }
 
 /* Crayon Pastel Cotton: cream + periwinkle + pink blend */
-body[data-theme="crayoncotton"] .zone-head {
+html body[data-theme="crayoncotton"] .zone-head {
   background: linear-gradient(90deg, rgba(255,255,255,.9), rgba(240,236,255,.82));
   color: #55538a;
 }
-body[data-theme="crayoncotton"] .deck-btn.primary { color: #fff; }
-body[data-theme="crayoncotton"] .chip::after { background: linear-gradient(90deg, #8a8fe0, #f2c94c, #f592b8); }
-body[data-theme="crayoncotton"] .progress-fill { background: linear-gradient(90deg, #8a8fe0, #f592b8); }
-body[data-theme="crayoncotton"] input[type="range"] { accent-color: #8a8fe0; }
+html body[data-theme="crayoncotton"] .deck-btn.primary { color: #fff; }
+html body[data-theme="crayoncotton"] .chip::after { background: linear-gradient(90deg, #8a8fe0, #f2c94c, #f592b8); }
+html body[data-theme="crayoncotton"] .progress-fill { background: linear-gradient(90deg, #8a8fe0, #f592b8); }
+html body[data-theme="crayoncotton"] input[type="range"] { accent-color: #8a8fe0; }
 
 /* =========================================================================
  * Per-theme skins (v2.8)
@@ -1301,31 +1949,31 @@ body[data-theme="crayoncotton"] input[type="range"] { accent-color: #8a8fe0; }
  * ========================================================================= */
 
 /* Cutie Fur: warm cream, fluffy rounded pet-bed panels */
-body[data-theme="cutiefur"] .preview-panel,
-body[data-theme="cutiefur"] .center-panel,
-body[data-theme="cutiefur"] .chip-zone {
+html body[data-theme="cutiefur"] .preview-panel,
+html body[data-theme="cutiefur"] .center-panel,
+html body[data-theme="cutiefur"] .chip-zone {
   border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 22px;
   box-shadow: 0 10px 26px rgba(180,120,70,.14), inset 0 0 0 4px rgba(255,255,255,.55);
 }
-body[data-theme="cutiefur"] .chip { border-radius: 18px; }
-body[data-theme="cutiefur"] .deck-btn,
-body[data-theme="cutiefur"] .mode-btn,
-body[data-theme="cutiefur"] .vol-box,
-body[data-theme="cutiefur"] .opacity-box,
-body[data-theme="cutiefur"] .speed-stepper,
-body[data-theme="cutiefur"] .time-box,
-body[data-theme="cutiefur"] .gear-btn { border-radius: 999px; }
-body[data-theme="cutiefur"] .deck-btn.primary { color: #fff; }
-body[data-theme="cutiefur"] .progress-wrap {
+html body[data-theme="cutiefur"] .chip { border-radius: 18px; }
+html body[data-theme="cutiefur"] .deck-btn,
+html body[data-theme="cutiefur"] .mode-btn,
+html body[data-theme="cutiefur"] .vol-box,
+html body[data-theme="cutiefur"] .opacity-box,
+html body[data-theme="cutiefur"] .speed-stepper,
+html body[data-theme="cutiefur"] .time-box,
+html body[data-theme="cutiefur"] .gear-btn { border-radius: 999px; }
+html body[data-theme="cutiefur"] .deck-btn.primary { color: #fff; }
+html body[data-theme="cutiefur"] .progress-wrap {
   background: rgba(217,141,85,.14);
   border-color: rgba(217,141,85,.32);
 }
-body[data-theme="cutiefur"] .zone-head {
+html body[data-theme="cutiefur"] .zone-head {
   background: linear-gradient(90deg, rgba(255,255,255,.9), rgba(250,231,209,.8));
   color: #8a5a33;
 }
-body[data-theme="cutiefur"] input[type="range"] { accent-color: #d98d55; }
+html body[data-theme="cutiefur"] input[type="range"] { accent-color: #d98d55; }
 
 /* Glass: frosted translucent panels over a cool dark backdrop */
 body[data-theme="glass"] .preview-panel,
@@ -1587,7 +2235,7 @@ body[data-theme="robot"] .clock-pill,
 body[data-theme="robot"] .tc-preset,
 body[data-theme="robot"] .tc-time-input { border-radius: 4px; }
 body[data-theme="glass"] .clock-pill { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); backdrop-filter: blur(6px); }
-body[data-theme="cutiefur"] .tc-preset { border-radius: 999px; }
+html body[data-theme="cutiefur"] .tc-preset { border-radius: 999px; }
 body[data-theme="moonlitfamiliar"] .clock-pill .pill-ico { fill: var(--accent2); }
 
 /* =========================================================================

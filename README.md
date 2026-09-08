@@ -36,15 +36,19 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
-- **테마 19종 + Adaptive**: Aurora Carbon부터 Crayon Pastel 3부작, Cutie Fur/Glass/Robot까지.
+- **테마 37종 + Adaptive**: Aurora Carbon 같은 기본 테마부터, 각자 UI 재질까지 바뀌는
+  개성 테마(Dusk Tape·CRT Phosphor·Riso Press·Neon Arcade·Sumi Ink·Woodblock Fall·Tidepool·
+  Blueprint·Cassette Deck·Stained Glass·Zen Ma·Comic Pop·Aqua Gel)와
+  귀여운 테마(Mochi Mochi·Brown Sugar Boba·Penguin Cafe·Cloud Soda·Velvet Kuro)까지.
   Adaptive 모드는 현재 곡 썸네일 색으로 테마를 만듭니다.
+- **테마 목록**: 테마 칩을 **클릭**하면 전체 테마를 미리보기 카드로 펼쳐 보고 바로 고를 수 있습니다.
 - **커스텀 테마 모드**: 테마 칩을 **우클릭**하면 에디터가 열립니다. 색상 5종을 고르고
   배경 이미지를 "채우기" 또는 "패턴 반복"으로 깔 수 있으며, 저장한 테마는 누적 보관되어
   테마 순환에 포함됩니다.
 - **트레이 아이콘**: 클릭으로 보이기/숨기기, 우클릭 메뉴로 재생 제어. 툴팁에 현재 곡 표시.
 - **Deck Island (시계·슬립 타이머·무음 알람)**: 센터 패널의 큰 시계(또는 상단 캡슐) 클릭 → 타임 카드.
   프리셋을 누르면 슬립 타이머가 즉시 시작되고, 시간이 다 되면 그 곡을 마지막으로 재생을 멈춥니다("앞으로 N분만 재생").
-  알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알리며, 모든 색은 테마 변수를 따라 19개 테마 + 커스텀 테마와 자동으로 어울립니다.
+  알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알리며, 모든 색은 테마 변수를 따라 37개 테마 + 커스텀 테마와 자동으로 어울립니다.
 - **상태 보존**: 라이브러리는 `문서\YTDeckPlayer\library-state.json`에 저장되고,
   손상 시 자동 백업본으로 복구됩니다.
 
@@ -61,7 +65,7 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 
 - 상단 `DOCK` 버튼: 하단 → 우측 → 좌측 → 자유 순으로 전환. 커서가 있는 모니터에 도킹됩니다.
 - `SPACE`: 작업영역 예약(AppBar) 토글. `PIN`: 항상 위.
-- 테마 칩 클릭: 테마 순환 / 우클릭: 커스텀 테마 에디터.
+- 테마 칩 클릭: 테마 목록 / 우클릭: 커스텀 테마 에디터. 목록의 `다음 테마`로 순환도 가능합니다.
 - 칩 우클릭: 온보드 토글·이름 변경·곡 목록 갱신·삭제.
 - `Ctrl+F`(또는 ON BOARD의 돋보기): 트랙 브라우저. 초성 검색·↑↓←→ 이동·Enter 재생·Esc 닫기.
 
@@ -90,8 +94,12 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
   avoids the 15 most recently played tracks), loop, playback speed, volume, and window opacity.
-- **19 built-in themes + Adaptive**: From Aurora Carbon to the Crayon Pastel trio, Cutie Fur,
-  Glass, and Robot. Adaptive derives a palette from the current track's thumbnail.
+- **37 built-in themes + Adaptive**: From plain palettes like Aurora Carbon, through themes that
+  change the interface material itself (Dusk Tape, CRT Phosphor, Riso Press, Neon Arcade, Sumi Ink,
+  Woodblock Fall, Tidepool, Blueprint, Cassette Deck, Stained Glass, Zen Ma, Comic Pop, Aqua Gel),
+  to the cute ones (Mochi Mochi, Brown Sugar Boba, Penguin Cafe, Cloud Soda, Velvet Kuro).
+  Adaptive derives a palette from the current track's thumbnail.
+- **Theme gallery**: **Click** the theme chip to see every theme as a preview card and pick one.
 - **Custom theme mode**: **Right-click** the theme chip to open the editor. Pick five base
   colors and optionally set a background image, either filled or repeated as a pattern.
   Saved themes accumulate and join the theme cycle.
@@ -101,7 +109,7 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   top capsule) for the time card. Presets start the sleep timer instantly; when time runs out the
   song playing becomes the last one ("play for N more minutes"). The alarm notifies with a
   three-stage color choreography (preheat → bloom → afterglow) instead of sound. Everything
-  follows theme variables, so all 19 themes and custom themes style it automatically.
+  follows theme variables, so all 37 themes and custom themes style it automatically.
 - **Durable state**: The library persists to `Documents\YTDeckPlayer\library-state.json` with
   automatic backup/recovery on corruption.
 
@@ -118,7 +126,7 @@ npm.cmd run dist:win # build portable exe + NSIS installer into dist/
 
 - `DOCK` cycles bottom → right → left → free, targeting the monitor under your cursor.
 - `SPACE` toggles the reserved work area (AppBar). `PIN` toggles always-on-top.
-- Click the theme chip to cycle themes; right-click it to open the custom theme editor.
+- Click the theme chip for the theme gallery; right-click it for the custom theme editor.
 - Right-click a chip for on-board toggle, rename, track refresh, and delete.
 - `Ctrl+F` (or the magnifier in ON BOARD) opens the track browser: search, arrow keys, Enter to play, Esc to close.
 

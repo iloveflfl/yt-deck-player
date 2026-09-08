@@ -35,6 +35,7 @@ let ytIdleTimer = null;
 let ytViewLoading = false;
 let ytViewHiddenByModal = false;
 let ytRevealTimer = null;
+let ytUnmuteTimer = null;
 // Set when the current document has been dressed, so a stray report from the
 // page being navigated away from cannot un-hide the view.
 let ytViewDressed = false;
@@ -1466,26 +1467,80 @@ const YT_VIEW_BRIDGE = `(() => {
   //
   // So: remember what we wrote. Anything else on the element came from YouTube
   // and is the new baseline to scale, not a value to overwrite.
-  // What remains: YouTube writes the gain as playback starts and the event
-  // reaches us a frame later, so about 19ms of audio leads at the raw level.
-  // Gating that frame with muted was tried and does not work - the clock starts
-  // before the write, so the gate lifts first - and intercepting the property
-  // means lying to the page about what it just set.
+  // YouTube writes that gain as playback starts, and waiting for the event to
+  // come back left the lead-in playing raw. The write itself is scaled now; see
+  // hookVolume. That still cannot cover what happens before this script exists
+  // in the page at all - muting the element was tried for that and does not
+  // work, because the clock starts before the write and the gate lifts first.
+  // The webContents-level gate in muteYtView covers it instead.
   let deckVolume = 1;
   let normGain = 1;
   let appliedVolume = -1;
+  let writingVolume = false;
+  const clamp01 = (x) => Math.max(0, Math.min(1, Number(x) || 0));
+  const nativeVolume = (() => {
+    try { return Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume'); } catch (e) { return null; }
+  })();
+  const setRaw = (v, value) => {
+    writingVolume = true;
+    try { v.volume = value; } catch (e) {} finally { writingVolume = false; }
+  };
+  // Correcting the level after YouTube writes it leaves however long the event
+  // takes to come back playing at the raw gain - measured at 150-270ms, which
+  // is four times too loud and plainly audible at the top of a track. Scaling
+  // the write as it happens closes that window. The page is told no more than
+  // it was already told: the old path overwrote the value it had just set, so
+  // a read has never returned YouTube's own number.
+  let mediaBoundTo = null;
+  // Hooking the element only works once the element exists, and YouTube can set
+  // the volume in the same task that creates it - before a MutationObserver
+  // callback gets to run - so the guard has to be on the prototype, installed
+  // before there is anything to guard. Only the deck's own player is scaled;
+  // any other media on the page is passed straight through.
+  const isDeckMedia = (el) => {
+    try {
+      if (el === mediaBoundTo) return true;
+      return !!(el && el.matches && el.matches('video.html5-main-video'));
+    } catch (e) { return false; }
+  };
+  const hookVolume = () => {
+    if (!nativeVolume || !nativeVolume.set || HTMLMediaElement.prototype.__deckVolumeHooked) return;
+    try {
+      Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
+        configurable: true,
+        get() { return nativeVolume.get.call(this); },
+        set(value) {
+          if (writingVolume || !isDeckMedia(this)) { nativeVolume.set.call(this, value); return; }
+          const raw = clamp01(value);
+          // The page reading our scaled value back and writing it again must
+          // not be mistaken for a new normalisation gain, or the level walks
+          // down a step per round trip.
+          if (appliedVolume >= 0 && Math.abs(raw - appliedVolume) <= 0.001) {
+            nativeVolume.set.call(this, appliedVolume);
+            return;
+          }
+          normGain = raw;
+          appliedVolume = clamp01(normGain * deckVolume);
+          nativeVolume.set.call(this, appliedVolume);
+        },
+      });
+      HTMLMediaElement.prototype.__deckVolumeHooked = true;
+    } catch (e) {}
+  };
+  hookVolume();
   const syncVolume = (v) => {
     if (!v) return;
     if (Math.abs(v.volume - appliedVolume) > 0.001) normGain = v.volume;
-    const want = Math.max(0, Math.min(1, normGain * deckVolume));
-    if (Math.abs(v.volume - want) > 0.001) {
-      try { v.volume = want; } catch (e) {}
-    }
+    const want = clamp01(normGain * deckVolume);
+    if (Math.abs(v.volume - want) > 0.001) setRaw(v, want);
     appliedVolume = want;
   };
-  let mediaBoundTo = null;
   const bindMedia = (v) => {
-    if (!v || mediaBoundTo === v) return;
+    if (!v) return;
+    // Re-checked on every observer tick rather than only on the first bind, so
+    // an element YouTube swaps in mid-session is scaled from its first write.
+    hookVolume();
+    if (mediaBoundTo === v) return;
     mediaBoundTo = v;
     // The element knows it has ended before anything else does. Reported here
     // rather than only from the poll, which can arrive after an ad has started
@@ -1797,10 +1852,31 @@ function applyYtViewBounds() {
 // half-built player in it. The embedded player never shows anything like that,
 // so the view stays hidden - the deck's own panel shows through - until the
 // bridge reports a frame, or until the wait has clearly gone wrong.
+// The bridge cannot be injected before YouTube's own scripts run, so the player
+// sets its normalisation gain and starts playing before anything of ours can
+// scale it - measured at roughly 230ms of audio four times louder than the deck
+// was asked for. Muting the whole webContents is the one gate that can be shut
+// before the page exists at all; it opens again the moment the deck's volume
+// has actually been pushed into the page.
+function muteYtView() {
+  clearTimeout(ytUnmuteTimer);
+  try { ytView?.webContents.setAudioMuted(true); } catch {}
+  // If dressing never happens the track must still be audible, so the gate is
+  // never left holding for longer than the page normally takes to settle.
+  ytUnmuteTimer = setTimeout(unmuteYtView, 4000);
+}
+
+function unmuteYtView() {
+  clearTimeout(ytUnmuteTimer);
+  ytUnmuteTimer = null;
+  try { ytView?.webContents.setAudioMuted(false); } catch {}
+}
+
 function holdYtView() {
   clearTimeout(ytRevealTimer);
   ytViewLoading = true;
   ytViewDressed = false;
+  muteYtView();
   applyYtViewBounds();
   ytRevealTimer = setTimeout(revealYtView, 12000);
 }
@@ -1808,8 +1884,11 @@ function holdYtView() {
 function revealYtView() {
   clearTimeout(ytRevealTimer);
   ytRevealTimer = null;
+  // Every progress report lands here, so nothing may run before this guard or
+  // it runs a few times a second for the life of the track.
   if (!ytViewLoading) return;
   ytViewLoading = false;
+  unmuteYtView();
   applyYtViewBounds();
 }
 
@@ -1864,15 +1943,18 @@ function ensureYtView() {
     ytView?.webContents.executeJavaScript(YT_VIEW_BRIDGE)
       .then(() => {
         // Hand the new document the deck's settings straight away; the bridge
-        // holds them until a player exists, so nothing is ever audible at
-        // YouTube's own level first.
+        // holds them until a player exists. Until this lands the audio gate is
+        // still shut, so nothing is ever audible at YouTube's own level first.
         if (ytLastVolume === null && ytLastRate === null) return null;
         const calls = [];
         if (ytLastVolume !== null) calls.push('window.__deckCmd(\'volume\', ' + JSON.stringify(ytLastVolume) + ')');
         if (ytLastRate !== null) calls.push('window.__deckCmd(\'rate\', ' + JSON.stringify(ytLastRate) + ')');
         return ytView?.webContents.executeJavaScript(calls.join(';') + ';true');
       })
-      .catch(() => {});
+      // Only now is the level the deck's own, so this is the earliest the audio
+      // gate can open without letting YouTube's gain through.
+      .then(() => { unmuteYtView(); })
+      .catch(() => { unmuteYtView(); });
     applyYtViewRadius(true);
   };
   ytView.webContents.on('dom-ready', dress);

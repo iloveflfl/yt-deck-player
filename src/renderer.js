@@ -60,6 +60,12 @@ const I18N = {
     shuffleBag: '셔플 백',
     shuffleChaos: '완전 무작위',
     loop: '반복',
+    themeGallery: '테마 목록',
+    themeGalleryHint: '카드를 누르면 바로 적용됩니다. 우클릭으로 커스텀 테마를 만들 수 있습니다.',
+    themeCurrent: '사용 중',
+    themeNext: '다음 테마',
+    themeCustomNew: '커스텀 테마',
+    themeCountLabel: '개 테마',
     adTitle: '광고 처리',
     adHelp: '유튜브 화면으로 재생할 때 광고·추적 요청을 차단하고, 건너뛸 수 있는 광고는 버튼이 뜨는 즉시 자동으로 넘깁니다. 건너뛰기가 없는 광고는 그대로 재생됩니다.',
     adOn: '켜기',
@@ -234,6 +240,12 @@ const I18N = {
     shuffleBag: 'Shuffle bag',
     shuffleChaos: 'Chaos',
     loop: 'Loop',
+    themeGallery: 'Themes',
+    themeGalleryHint: 'Pick a card to apply it. Right-click the theme chip to build your own.',
+    themeCurrent: 'in use',
+    themeNext: 'Next theme',
+    themeCustomNew: 'Custom theme',
+    themeCountLabel: 'themes',
     adTitle: 'Ad handling',
     adHelp: 'Blocks ad and tracking requests on the YouTube view, and presses skip the moment the button appears. Ads with no skip button still play through.',
     adOn: 'On',
@@ -395,6 +407,24 @@ const THEMES = {
   crayonbloom: { name: 'Crayon Pastel Bloom', light: true, bg0: '#ffeef4', bg1: '#ffdfe9', panel: 'rgba(255,251,253,.92)', panel2: 'rgba(255,244,249,.95)', text: '#69375d', muted: '#9c6a8e', accent: '#f06fa8', accent2: '#7cc3ea', good: '#e8b64c', art: 'assets/crayon-bloom.svg', artOpacity: 0.30, artSize: 'auto 82%', artPosition: 'left center', line: 'rgba(240,111,168,0.24)' },
   crayoncotton: { name: 'Crayon Pastel Cotton', light: true, bg0: '#fdf7ec', bg1: '#f1ecfd', panel: 'rgba(255,253,248,.93)', panel2: 'rgba(250,245,255,.95)', text: '#41406b', muted: '#807ea3', accent: '#8a8fe0', accent2: '#f592b8', good: '#f2c94c', art: 'assets/crayon-cotton.svg', artOpacity: 0.32, artSize: 'auto 82%', artPosition: 'left center', line: 'rgba(138,143,224,0.26)' },
   cutiefur: { name: 'Cutie Fur', light: true, bg0: '#fdf3e7', bg1: '#f7e3cd', panel: 'rgba(255,251,244,.93)', panel2: 'rgba(252,243,231,.95)', text: '#5b3a26', muted: '#97714f', accent: '#d98d55', accent2: '#f0a3b0', good: '#8fbf74', line: 'rgba(217,141,85,0.26)' },
+  dusktape: { name: 'Dusk Tape', bg0: '#050c12', bg1: '#0f2029', panel: 'rgba(13,31,41,.90)', panel2: 'rgba(7,18,25,.94)', text: '#f6e9dc', muted: '#93a6ac', accent: '#f8930f', accent2: '#5fb6c8', good: '#6fd3b8', art: 'assets/dusk-tape.png', artOpacity: 0.20, artSize: 'auto 84%', artPosition: 'left center', line: 'rgba(248,147,15,0.26)' },
+  crtphosphor: { name: 'CRT Phosphor', bg0: '#000000', bg1: '#061009', panel: 'rgba(6,18,10,.92)', panel2: 'rgba(2,8,4,.96)', text: '#8ef0a4', muted: '#4f8f63', accent: '#60d878', accent2: '#b9ffcb', good: '#60d878', art: 'assets/crt-phosphor.png', artOpacity: 0.22, artSize: 'auto 84%', artPosition: 'left center', line: 'rgba(96,216,120,0.30)' },
+  risopress: { name: 'Riso Press', light: true, bg0: '#f4f1e6', bg1: '#e9e4d4', panel: 'rgba(252,250,243,.97)', panel2: 'rgba(244,241,230,.98)', text: '#141414', muted: '#5d5a52', accent: '#f03000', accent2: '#2b2926', good: '#3f7a4f', art: 'assets/riso-press.png', artOpacity: 0.16, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(20,20,20,0.34)' },
+  neonarcade: { name: 'Neon Arcade', bg0: '#05000f', bg1: '#150141', panel: 'rgba(18,2,54,.88)', panel2: 'rgba(9,0,30,.93)', text: '#f4e9ff', muted: '#9d8ac6', accent: '#ff2fd0', accent2: '#22e7ff', good: '#8cff5a', art: 'assets/neon-arcade.png', artOpacity: 0.26, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(255,47,208,0.34)' },
+  sumiink: { name: 'Sumi Ink', light: true, bg0: '#f7f5f0', bg1: '#eeebe3', panel: 'rgba(255,255,255,.95)', panel2: 'rgba(248,246,241,.97)', text: '#141210', muted: '#6b6660', accent: '#2f2c28', accent2: '#b0210f', good: '#4a6b4f', art: 'assets/sumi-ink.png', artOpacity: 0.20, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(20,18,16,0.22)' },
+  woodblockfall: { name: 'Woodblock Fall', light: true, bg0: '#f6efdd', bg1: '#ead9bd', panel: 'rgba(253,248,236,.96)', panel2: 'rgba(246,238,221,.97)', text: '#3b2a1c', muted: '#7c6650', accent: '#d2622a', accent2: '#7a7f46', good: '#8c7a3f', art: 'assets/woodblock-fall.png', artOpacity: 0.22, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(210,98,42,0.30)' },
+  tidepool: { name: 'Tidepool', bg0: '#000305', bg1: '#02121a', panel: 'rgba(2,16,20,.90)', panel2: 'rgba(0,7,10,.95)', text: '#d8fff0', muted: '#6c9a90', accent: '#2ef0a8', accent2: '#9ee34a', good: '#7ef7d8', art: 'assets/tidepool-glow.png', artOpacity: 0.30, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(46,240,168,0.26)' },
+  blueprint: { name: 'Blueprint', light: true, bg0: '#e8eef6', bg1: '#dbe6f2', panel: 'rgba(244,248,253,.82)', panel2: 'rgba(232,240,249,.86)', text: '#0b2c5e', muted: '#5d7ba3', accent: '#0d5bd4', accent2: '#00387c', good: '#0f8a7a', art: 'assets/blueprint.png', artOpacity: 0.26, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(11,44,94,0.34)' },
+  cassette: { name: 'Cassette Deck', bg0: '#0b0b0c', bg1: '#1c1e20', panel: 'rgba(42,44,47,.96)', panel2: 'rgba(24,26,28,.97)', text: '#e8e6e0', muted: '#9aa3a8', accent: '#f77f00', accent2: '#b8c2c8', good: '#7fd18a', art: 'assets/cassette.png', artOpacity: 0.20, artSize: 'auto 82%', artPosition: 'left center', line: 'rgba(184,194,200,0.24)' },
+  stainedglass: { name: 'Stained Glass', bg0: '#04050a', bg1: '#0a1020', panel: 'rgba(9,15,30,.94)', panel2: 'rgba(4,7,15,.96)', text: '#f2ecdf', muted: '#8d93a8', accent: '#1f8fd6', accent2: '#c62134', good: '#2f9e6a', art: 'assets/stained.png', artOpacity: 0.34, artSize: 'auto 90%', artPosition: 'left center', line: 'rgba(31,143,214,0.30)' },
+  zenma: { name: 'Zen Ma', light: true, bg0: '#f3ece0', bg1: '#e9e0cf', panel: 'rgba(250,246,238,.94)', panel2: 'rgba(243,236,224,.96)', text: '#3a3730', muted: '#8b8677', accent: '#8a8a6e', accent2: '#c4622a', good: '#6f7f5e', art: 'assets/zen-sand.png', artOpacity: 0.24, artSize: 'auto 92%', artPosition: 'left center', line: 'rgba(58,55,48,0.14)' },
+  comicpop: { name: 'Comic Pop', light: true, bg0: '#fff8e6', bg1: '#ffeec4', panel: 'rgba(255,255,255,.97)', panel2: 'rgba(255,248,230,.98)', text: '#0a0a0a', muted: '#5a5a5a', accent: '#e01b1b', accent2: '#1652d6', good: '#f5c400', art: 'assets/comic-pop.png', artOpacity: 0.20, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(10,10,10,0.55)' },
+  aquagel: { name: 'Aqua Gel', light: true, bg0: '#dff4fb', bg1: '#bfe8f6', panel: 'rgba(255,255,255,.70)', panel2: 'rgba(228,247,253,.78)', text: '#093344', muted: '#4b7f95', accent: '#00a6d6', accent2: '#0cd3d3', good: '#22c08a', art: 'assets/aqua-gel.png', artOpacity: 0.26, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(0,166,214,0.26)' },
+  mochi: { name: 'Mochi Mochi', light: true, bg0: '#f7f1ef', bg1: '#e7dbd8', panel: 'rgba(255,253,252,.95)', panel2: 'rgba(248,241,239,.96)', text: '#4b3a3c', muted: '#907a7c', accent: '#d0778c', accent2: '#7f9c7a', good: '#7fa87c', art: 'assets/mochi.png', artOpacity: 0.18, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(208,119,140,0.20)' },
+  boba: { name: 'Brown Sugar Boba', bg0: '#150e0a', bg1: '#2b1c12', panel: 'rgba(50,32,22,.92)', panel2: 'rgba(30,19,13,.95)', text: '#f7e7cf', muted: '#b0947a', accent: '#e0a45c', accent2: '#efdcc0', good: '#9ec27a', art: 'assets/boba.png', artOpacity: 0.14, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(224,164,92,0.26)' },
+  penguin: { name: 'Penguin Cafe', light: true, bg0: '#ecf6f5', bg1: '#d8ecea', panel: 'rgba(255,255,255,.96)', panel2: 'rgba(240,249,248,.97)', text: '#1f2c33', muted: '#63808a', accent: '#ff7a45', accent2: '#2b3a44', good: '#2f9e8a', art: 'assets/penguin.png', artOpacity: 0.20, artSize: 'auto 84%', artPosition: 'left center', line: 'rgba(43,58,68,0.18)' },
+  cloudsoda: { name: 'Cloud Soda', light: true, bg0: '#e9f2ff', bg1: '#f7e7f3', panel: 'rgba(255,255,255,.90)', panel2: 'rgba(246,250,255,.94)', text: '#3b4a6b', muted: '#7483aa', accent: '#5b8fe0', accent2: '#e8a92e', good: '#5cbfa6', art: 'assets/cloud-soda.png', artOpacity: 0.24, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(91,143,224,0.26)' },
+  velvetkuro: { name: 'Velvet Kuro', bg0: '#08060f', bg1: '#181033', panel: 'rgba(26,16,48,.92)', panel2: 'rgba(14,8,28,.95)', text: '#f4e8ff', muted: '#a48fc4', accent: '#ff5fa2', accent2: '#dcb0ff', good: '#8de6c4', art: 'assets/velvet-kuro.png', artOpacity: 0.22, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(255,95,162,0.28)' },
   glass: { name: 'Glass', bg0: '#0d141d', bg1: '#182534', panel: 'rgba(150,182,216,.13)', panel2: 'rgba(120,150,185,.10)', text: '#eef5fc', muted: '#9fb4c8', accent: '#9fd8ff', accent2: '#c9b7ff', good: '#9fffd8', line: 'rgba(214,235,255,0.22)' },
   robot: { name: 'Robot', bg0: '#0b0e12', bg1: '#141a21', panel: 'rgba(24,31,39,.94)', panel2: 'rgba(15,20,26,.96)', text: '#d9f3e8', muted: '#7e948d', accent: '#39e6a3', accent2: '#ff8a3d', good: '#a7f26a', line: 'rgba(57,230,163,0.24)' },
 };
@@ -1761,6 +1791,81 @@ function findCustomTheme(mode) {
 
 function themeCycleOrder() {
   return [...Object.keys(THEMES), ...getCustomThemes().map((def) => `custom:${def.id}`), 'adaptive'];
+}
+
+// Cycling was fine at a handful of themes and is not at two dozen: the chip now
+// opens the set at once. Each card is drawn from the theme's own tokens, so the
+// list cannot drift from what applying it actually does.
+function themePreviewTokens(mode) {
+  if (mode === 'adaptive') return null;
+  const custom = findCustomTheme(mode);
+  if (custom) {
+    return {
+      bg1: normalizeHex(custom.bg1, '#10141f'),
+      panel: normalizeHex(custom.panel2 || custom.bg0, '#0c0f19'),
+      text: normalizeHex(custom.text, '#edf3ff'),
+      accent: normalizeHex(custom.accent, '#7bdcff'),
+      accent2: normalizeHex(custom.accent2 || custom.accent, '#b28cff'),
+      art: '',
+    };
+  }
+  const th = THEMES[mode];
+  if (!th) return null;
+  return { bg1: th.bg1, panel: th.panel2, text: th.text, accent: th.accent, accent2: th.accent2, art: th.art || '' };
+}
+
+function themeGalleryFlow() {
+  const order = themeCycleOrder();
+  const current = state.settings.themeMode || 'aurora';
+  const card = (mode) => {
+    const tok = themePreviewTokens(mode);
+    const on = mode === current;
+    const name = themeDisplayName(mode);
+    const art = tok && tok.art
+      ? '<span class="tg-art" style="background-image:url(&quot;' + escapeAttrText(tok.art) + '&quot;)"></span>'
+      : '';
+    const face = tok
+      ? '<span class="tg-face" style="background:' + escapeAttrText(tok.bg1) + '">' + art
+        + '<span class="tg-panel" style="background:' + escapeAttrText(tok.panel) + '"></span>'
+        + '<span class="tg-bar" style="background:linear-gradient(90deg,' + escapeAttrText(tok.accent2) + ',' + escapeAttrText(tok.accent) + ')"></span>'
+        + '<span class="tg-dot" style="background:' + escapeAttrText(tok.accent) + '"></span>'
+        + '</span>'
+      : '<span class="tg-face tg-adaptive"><span class="tg-auto">AUTO</span></span>';
+    return '<button class="tg-card' + (on ? ' on' : '') + '" type="button" data-theme-key="' + escapeAttrText(mode) + '">'
+      + face
+      + '<span class="tg-name">' + escapeHtml(name) + '</span>'
+      + (on ? '<span class="tg-now">' + escapeHtml(t('themeCurrent')) + '</span>' : '')
+      + '</button>';
+  };
+
+  showModal(t('themeGallery'), [
+    '<div class="settings-form theme-gallery-form">',
+    '  <div class="field-copy tg-head"><strong>' + escapeHtml(order.length + ' ' + t('themeCountLabel')) + '</strong><span>' + escapeHtml(t('themeGalleryHint')) + '</span></div>',
+    '  <div class="theme-grid">' + order.map(card).join('') + '</div>',
+    '  <div class="form-actions settings-actions">',
+    '    <button id="tgNext" class="mini-action" type="button">' + escapeHtml(t('themeNext')) + '</button>',
+    '    <button id="tgCustom" class="mini-action" type="button">' + escapeHtml(t('themeCustomNew')) + '</button>',
+    '    <button id="tgClose" class="primary-action" type="button">' + escapeHtml(t('close')) + '</button>',
+    '  </div>',
+    '</div>',
+  ].join('\n'));
+
+  document.querySelectorAll('.tg-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.themeKey;
+      if (!key) return;
+      state.settings.themeMode = key;
+      lastAppliedAdaptiveKey = '';
+      applyThemeForCurrentItem(true);
+      updateControls();
+      saveState();
+      setSubtitle(`Theme: ${themeDisplayName(key)}`);
+      hideModal();
+    });
+  });
+  document.querySelector('#tgNext')?.addEventListener('click', () => { cycleTheme(); themeGalleryFlow(); });
+  document.querySelector('#tgCustom')?.addEventListener('click', () => { customThemeFlow(); });
+  document.querySelector('#tgClose')?.addEventListener('click', hideModal);
 }
 
 function themeDisplayName(mode) {
@@ -4026,7 +4131,7 @@ function handleYtEvent(payload) {
 function wireEvents() {
   els.addBtn.addEventListener('click', addPlaylistFlow);
   els.apiBtn.addEventListener('click', apiKeyFlow);
-  els.themeBtn?.addEventListener('click', cycleTheme);
+  els.themeBtn?.addEventListener('click', themeGalleryFlow);
   els.themeBtn?.addEventListener('contextmenu', (e) => { e.preventDefault(); customThemeFlow(); });
   els.searchBtn?.addEventListener('click', trackBrowserFlow);
   els.accountBtn?.addEventListener('click', accountFlow);
