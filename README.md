@@ -36,10 +36,11 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 - **칩 보드**: 유튜브 플레이리스트/영상 링크를 라이브러리에 저장하고, 온보드로 드래그해서 재생 풀을 구성.
   브라우저에서 링크를 직접 끌어다 놓을 수도 있습니다. API 키 없이 곡 목록을 불러옵니다.
 - **재생 컨트롤**: 진행바 드래그 스크럽, 셔플(순차/백/카오스 — 카오스는 최근 15곡 재등장 회피), 반복, 배속, 볼륨, 창 불투명도.
-- **테마 37종 + Adaptive**: Aurora Carbon 같은 기본 테마부터, 각자 UI 재질까지 바뀌는
+- **테마 47종 + Adaptive**: Aurora Carbon 같은 기본 테마부터, 각자 UI 재질까지 바뀌는
   개성 테마(Dusk Tape·CRT Phosphor·Riso Press·Neon Arcade·Sumi Ink·Woodblock Fall·Tidepool·
   Blueprint·Cassette Deck·Stained Glass·Zen Ma·Comic Pop·Aqua Gel)와
-  귀여운 테마(Mochi Mochi·Brown Sugar Boba·Penguin Cafe·Cloud Soda·Velvet Kuro)까지.
+  귀여운 테마(Mochi Mochi·Brown Sugar Boba·Penguin Cafe·Cloud Soda·Velvet Kuro·Sticker Diary·Astro Cat·Cozy Yarn·Bakery),
+  그리고 UI의 모양 자체가 바뀌는 특수 테마(Turntable·Terminal·Metro Line·Pixel Quest·Hologram·Newsprint)까지.
   Adaptive 모드는 현재 곡 썸네일 색으로 테마를 만듭니다.
 - **테마 목록**: 테마 칩을 **클릭**하면 전체 테마를 미리보기 카드로 펼쳐 보고 바로 고를 수 있습니다.
 - **커스텀 테마 모드**: 테마 칩을 **우클릭**하면 에디터가 열립니다. 색상 5종을 고르고
@@ -48,7 +49,7 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
 - **트레이 아이콘**: 클릭으로 보이기/숨기기, 우클릭 메뉴로 재생 제어. 툴팁에 현재 곡 표시.
 - **Deck Island (시계·슬립 타이머·무음 알람)**: 센터 패널의 큰 시계(또는 상단 캡슐) 클릭 → 타임 카드.
   프리셋을 누르면 슬립 타이머가 즉시 시작되고, 시간이 다 되면 그 곡을 마지막으로 재생을 멈춥니다("앞으로 N분만 재생").
-  알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알리며, 모든 색은 테마 변수를 따라 37개 테마 + 커스텀 테마와 자동으로 어울립니다.
+  알람은 소리 대신 3단계 색 안무(예고→개화→잔광)로 알리며, 모든 색은 테마 변수를 따라 47개 테마 + 커스텀 테마와 자동으로 어울립니다.
 - **상태 보존**: 라이브러리는 `문서\YTDeckPlayer\library-state.json`에 저장되고,
   손상 시 자동 백업본으로 복구됩니다.
 
@@ -94,10 +95,12 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   build a play pool, or drop links straight from the browser. Track lists load without an API key.
 - **Playback controls**: Live progress-bar scrubbing, shuffle (sequential/bag/chaos — chaos
   avoids the 15 most recently played tracks), loop, playback speed, volume, and window opacity.
-- **37 built-in themes + Adaptive**: From plain palettes like Aurora Carbon, through themes that
+- **47 built-in themes + Adaptive**: From plain palettes like Aurora Carbon, through themes that
   change the interface material itself (Dusk Tape, CRT Phosphor, Riso Press, Neon Arcade, Sumi Ink,
   Woodblock Fall, Tidepool, Blueprint, Cassette Deck, Stained Glass, Zen Ma, Comic Pop, Aqua Gel),
-  to the cute ones (Mochi Mochi, Brown Sugar Boba, Penguin Cafe, Cloud Soda, Velvet Kuro).
+  to the cute ones (Mochi Mochi, Brown Sugar Boba, Penguin Cafe, Cloud Soda, Velvet Kuro, Sticker Diary,
+  Astro Cat, Cozy Yarn, Bakery) and the special ones that redraw the interface itself (Turntable, Terminal,
+  Metro Line, Pixel Quest, Hologram, Newsprint).
   Adaptive derives a palette from the current track's thumbnail.
 - **Theme gallery**: **Click** the theme chip to see every theme as a preview card and pick one.
 - **Custom theme mode**: **Right-click** the theme chip to open the editor. Pick five base
@@ -109,7 +112,7 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   top capsule) for the time card. Presets start the sleep timer instantly; when time runs out the
   song playing becomes the last one ("play for N more minutes"). The alarm notifies with a
   three-stage color choreography (preheat → bloom → afterglow) instead of sound. Everything
-  follows theme variables, so all 37 themes and custom themes style it automatically.
+  follows theme variables, so all 47 themes and custom themes style it automatically.
 - **Durable state**: The library persists to `Documents\YTDeckPlayer\library-state.json` with
   automatic backup/recovery on corruption.
 

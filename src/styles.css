@@ -1239,7 +1239,7 @@ html body[data-theme="zenma"] .speed-stepper {
 html body[data-theme="zenma"] .chip { border-bottom: 1px solid rgba(58,55,48,.16); }
 html body[data-theme="zenma"] .progress-wrap { background: rgba(58,55,48,.10); border-radius: 0; }
 html body[data-theme="zenma"] .progress-fill { background: #3a3730; border-radius: 0; }
-html body[data-theme="zenma"] .progress-knob { background: #c4622a; box-shadow: none; }
+html body[data-theme="zenma"] .progress-knob:not(.custom-image) { background: #c4622a; box-shadow: none; }
 html body[data-theme="zenma"] .status-pill { background: transparent; border-color: transparent; color: #8b8677; letter-spacing: .3em; }
 
 /* === Comic Pop: inked outlines and a hard shadow ========================= */
@@ -1650,7 +1650,7 @@ html body[data-theme="sumiink"] .speed-stepper {
 }
 html body[data-theme="sumiink"] .track-title { letter-spacing: .01em; }
 html body[data-theme="sumiink"] .progress-fill { background: #141210; }
-html body[data-theme="sumiink"] .progress-knob { background: #b0210f; }
+html body[data-theme="sumiink"] .progress-knob:not(.custom-image) { background: #b0210f; }
 html body[data-theme="sumiink"] .status-pill { background: transparent; color: #b0210f; border-color: rgba(176,33,15,.45); }
 
 /* --- Woodblock Fall: carved blocks, flat colour -------------------------- */
@@ -2588,3 +2588,542 @@ body.browser-mode .track-sub { color: color-mix(in srgb, var(--accent2) 70%, var
   filter: grayscale(.6);
 }
 .file-pick-btn:disabled:hover { filter: grayscale(.6); }
+
+/* =========================================================================
+ * Special themes. These are allowed to change the shape of the interface,
+ * not only its colours: a record that turns, a progress bar that reads as a
+ * metro line, a deck set as terminal text. Each block is written after the
+ * generic light-theme rules and prefixed with `html` where the theme is a
+ * light one, because a bare body[data-theme] ties with body.light-theme on
+ * specificity and then loses to it on source order.
+ * ====================================================================== */
+
+/* --- Sticker Diary: a page out of a scrapbook -------------------------- */
+html body[data-theme="stickerdiary"] .preview-panel,
+html body[data-theme="stickerdiary"] .center-panel,
+html body[data-theme="stickerdiary"] .chip-panel {
+  border-radius: 14px;
+  border-color: rgba(74,63,56,.14);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 21px, rgba(95,189,174,.16) 21px 22px),
+    linear-gradient(180deg, rgba(255,253,248,.97), rgba(250,244,234,.97));
+  box-shadow: 0 6px 18px rgba(120,95,80,.10);
+}
+html body[data-theme="stickerdiary"] .zone-head {
+  background: linear-gradient(180deg, rgba(239,127,162,.30), rgba(239,127,162,.18));
+  border-bottom: 1px dashed rgba(74,63,56,.24);
+  color: #6d3a4c;
+  letter-spacing: .12em;
+}
+html body[data-theme="stickerdiary"] .chip {
+  border-radius: 10px;
+  border: 1px solid rgba(74,63,56,.16);
+  background: linear-gradient(180deg, #fffdf8, #fbf3e8);
+  box-shadow: 0 3px 8px rgba(120,95,80,.16);
+  transform: rotate(-0.5deg);
+}
+html body[data-theme="stickerdiary"] .chip:nth-child(even) { transform: rotate(0.5deg); }
+html body[data-theme="stickerdiary"] .chip:hover { transform: rotate(0deg) translateY(-2px); }
+html body[data-theme="stickerdiary"] .chip-row { padding-top: 7px; padding-bottom: 7px; }
+html body[data-theme="stickerdiary"] .chip::after { height: 4px; opacity: .8; }
+html body[data-theme="stickerdiary"] .tiny-btn,
+html body[data-theme="stickerdiary"] .mini-action,
+html body[data-theme="stickerdiary"] .deck-btn { border-radius: 999px; border-style: dashed; }
+html body[data-theme="stickerdiary"] .progress-wrap { border-radius: 4px; background: rgba(74,63,56,.10); }
+html body[data-theme="stickerdiary"] .progress-fill { border-radius: 4px; }
+html body[data-theme="stickerdiary"] .status-pill { border-radius: 6px; }
+
+/* --- Astro Cat: a porthole onto a starfield ---------------------------- */
+body[data-theme="astrocat"] .preview-panel,
+body[data-theme="astrocat"] .center-panel,
+body[data-theme="astrocat"] .chip-panel {
+  border-radius: 20px;
+  background:
+    radial-gradient(1px 1px at 18% 24%, rgba(255,255,255,.75), transparent 60%),
+    radial-gradient(1px 1px at 62% 12%, rgba(255,255,255,.55), transparent 60%),
+    radial-gradient(1.4px 1.4px at 82% 62%, rgba(255,255,255,.65), transparent 60%),
+    radial-gradient(1px 1px at 36% 78%, rgba(255,255,255,.45), transparent 60%),
+    linear-gradient(180deg, rgba(20,30,58,.92), rgba(11,18,38,.95));
+  box-shadow: 0 10px 34px rgba(0,0,0,.45), inset 0 0 40px rgba(124,224,200,.05);
+}
+body[data-theme="astrocat"] .zone-head {
+  background: linear-gradient(180deg, rgba(124,224,200,.16), rgba(124,224,200,.05));
+  border-bottom: 1px solid rgba(124,224,200,.22);
+  color: #bff3e7;
+}
+body[data-theme="astrocat"] .chip { border-radius: 16px; border-color: rgba(124,224,200,.24); }
+body[data-theme="astrocat"] .tiny-btn,
+body[data-theme="astrocat"] .mini-action,
+body[data-theme="astrocat"] .deck-btn,
+body[data-theme="astrocat"] .vol-box,
+body[data-theme="astrocat"] .time-box,
+body[data-theme="astrocat"] .speed-stepper { border-radius: 999px; }
+body[data-theme="astrocat"] .progress-wrap { border-radius: 999px; background: rgba(124,224,200,.10); }
+body[data-theme="astrocat"] .progress-knob:not(.custom-image) {
+  background: radial-gradient(circle at 35% 32%, #ffd9b8, #ffb38a 60%, #d98a5f);
+  box-shadow: 0 0 0 2px rgba(124,224,200,.55), 0 0 14px rgba(124,224,200,.5);
+}
+body[data-theme="astrocat"] .fallback-mark { border-radius: 50%; }
+
+/* --- Cozy Yarn: knitted, stitched, soft -------------------------------- */
+html body[data-theme="cozyyarn"] .preview-panel,
+html body[data-theme="cozyyarn"] .center-panel,
+html body[data-theme="cozyyarn"] .chip-panel {
+  border-radius: 18px;
+  border-color: rgba(76,64,56,.16);
+  background:
+    repeating-linear-gradient(45deg, rgba(201,128,111,.05) 0 6px, transparent 6px 12px),
+    linear-gradient(180deg, rgba(253,249,242,.97), rgba(246,239,229,.97));
+  box-shadow: 0 6px 20px rgba(120,95,80,.12);
+}
+html body[data-theme="cozyyarn"] .zone-head {
+  background: rgba(201,128,111,.12);
+  border-bottom: 2px dashed rgba(201,128,111,.34);
+  color: #7a4b40;
+}
+html body[data-theme="cozyyarn"] .chip {
+  border-radius: 16px;
+  border: 2px dashed rgba(201,128,111,.30);
+  background: linear-gradient(180deg, #fffdf9, #f7efe4);
+  box-shadow: 0 4px 12px rgba(120,95,80,.12);
+}
+html body[data-theme="cozyyarn"] .tiny-btn,
+html body[data-theme="cozyyarn"] .mini-action,
+html body[data-theme="cozyyarn"] .deck-btn { border-radius: 999px; }
+html body[data-theme="cozyyarn"] .progress-wrap { border-radius: 999px; background: rgba(76,64,56,.10); }
+html body[data-theme="cozyyarn"] .progress-fill {
+  background: repeating-linear-gradient(115deg, #c9806f 0 7px, #dda08f 7px 14px);
+  box-shadow: none;
+}
+html body[data-theme="cozyyarn"] .progress-knob:not(.custom-image) { box-shadow: 0 0 0 3px rgba(201,128,111,.35); }
+
+/* --- Bakery: warm crust and sugar -------------------------------------- */
+html body[data-theme="bakery"] .preview-panel,
+html body[data-theme="bakery"] .center-panel,
+html body[data-theme="bakery"] .chip-panel {
+  border-radius: 20px;
+  border: 2px solid rgba(217,134,58,.28);
+  background: linear-gradient(180deg, rgba(255,252,244,.97), rgba(250,242,227,.97));
+  box-shadow: 0 6px 18px rgba(150,110,60,.14);
+}
+html body[data-theme="bakery"] .zone-head {
+  background: linear-gradient(180deg, rgba(217,134,58,.22), rgba(217,134,58,.10));
+  border-bottom: 1px solid rgba(217,134,58,.30);
+  color: #7a4f22;
+}
+html body[data-theme="bakery"] .chip {
+  border-radius: 18px;
+  border-color: rgba(217,134,58,.26);
+  background: linear-gradient(180deg, #fffdf7, #f9efdc);
+  box-shadow: 0 4px 12px rgba(150,110,60,.16);
+}
+html body[data-theme="bakery"] .tiny-btn,
+html body[data-theme="bakery"] .mini-action,
+html body[data-theme="bakery"] .deck-btn,
+html body[data-theme="bakery"] .step-btn { border-radius: 999px; }
+html body[data-theme="bakery"] .progress-wrap { border-radius: 999px; background: rgba(77,58,36,.10); }
+html body[data-theme="bakery"] .progress-fill {
+  background:
+    repeating-linear-gradient(72deg, rgba(255,255,255,.32) 0 2px, transparent 2px 11px),
+    linear-gradient(90deg, #e5a558, #d9863a);
+  box-shadow: none;
+}
+html body[data-theme="bakery"] .status-pill { border-radius: 999px; }
+
+/* --- Turntable: the deck as a deck ------------------------------------- */
+body[data-theme="turntable"] .preview-panel,
+body[data-theme="turntable"] .center-panel,
+body[data-theme="turntable"] .chip-panel {
+  border-radius: 6px;
+  border-color: rgba(224,161,60,.24);
+  background: linear-gradient(180deg, rgba(46,32,22,.95), rgba(24,17,11,.96));
+  box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 1px 0 rgba(224,161,60,.12);
+}
+body[data-theme="turntable"] .zone-head {
+  background: linear-gradient(180deg, rgba(224,161,60,.16), rgba(224,161,60,.05));
+  border-bottom: 1px solid rgba(224,161,60,.24);
+  color: #f2d9a8;
+}
+body[data-theme="turntable"] .chip { border-radius: 4px; border-color: rgba(224,161,60,.22); }
+body[data-theme="turntable"] .tiny-btn,
+body[data-theme="turntable"] .mini-action,
+body[data-theme="turntable"] .deck-btn { border-radius: 4px; }
+body[data-theme="turntable"] .fallback-mark {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #e0a13c 0 17%, #1a120c 17% 19%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #14100c 0 2px, #241a12 2px 4px);
+  box-shadow: 0 0 0 1px rgba(224,161,60,.35), 0 10px 24px rgba(0,0,0,.55);
+  animation: deck-spin 1.8s linear infinite;
+}
+@keyframes deck-spin { to { transform: rotate(360deg); } }
+body[data-theme="turntable"] .progress-wrap {
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, rgba(224,161,60,.10) 0 3px, rgba(0,0,0,.28) 3px 6px);
+}
+body[data-theme="turntable"] .progress-fill { background: linear-gradient(90deg, #c96a3a, #e0a13c); border-radius: 2px; }
+body[data-theme="turntable"] .progress-knob:not(.custom-image) { border-radius: 2px; width: 6px; background: #f0e3d2; }
+
+/* --- Terminal: the deck set as text ------------------------------------ */
+body[data-theme="terminal"] .chip-title,
+body[data-theme="terminal"] .chip-sub,
+body[data-theme="terminal"] .track-title,
+body[data-theme="terminal"] .track-sub,
+body[data-theme="terminal"] .zone-head,
+body[data-theme="terminal"] .tiny-btn,
+body[data-theme="terminal"] .mini-action,
+body[data-theme="terminal"] .deck-btn,
+body[data-theme="terminal"] .status-pill,
+body[data-theme="terminal"] .time-box,
+body[data-theme="terminal"] .vol-box,
+body[data-theme="terminal"] .speed-stepper {
+  font-family: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace, monospace;
+  letter-spacing: 0;
+}
+body[data-theme="terminal"] .preview-panel,
+body[data-theme="terminal"] .center-panel,
+body[data-theme="terminal"] .chip-panel,
+body[data-theme="terminal"] .chip-zone,
+body[data-theme="terminal"] .chip,
+body[data-theme="terminal"] .tiny-btn,
+body[data-theme="terminal"] .mini-action,
+body[data-theme="terminal"] .deck-btn,
+body[data-theme="terminal"] .step-btn,
+body[data-theme="terminal"] .status-pill,
+body[data-theme="terminal"] .time-box,
+body[data-theme="terminal"] .vol-box,
+body[data-theme="terminal"] .speed-stepper,
+body[data-theme="terminal"] .progress-wrap,
+body[data-theme="terminal"] .progress-fill,
+body[data-theme="terminal"] .progress-knob:not(.custom-image) { border-radius: 0; }
+body[data-theme="terminal"] .preview-panel,
+body[data-theme="terminal"] .center-panel,
+body[data-theme="terminal"] .chip-panel {
+  border: 1px solid rgba(215,220,227,.28);
+  background: rgba(11,13,16,.97);
+  box-shadow: none;
+}
+body[data-theme="terminal"] .zone-head {
+  background: transparent;
+  border-bottom: 1px solid rgba(215,220,227,.24);
+  color: #7fd88f;
+  text-transform: lowercase;
+}
+body[data-theme="terminal"] .chip {
+  border: 1px solid rgba(215,220,227,.20);
+  background: rgba(255,255,255,.02);
+  box-shadow: none;
+}
+body[data-theme="terminal"] .chip::after { display: none; }
+body[data-theme="terminal"] .chip-title::before { content: "$ "; color: #7fd88f; }
+body[data-theme="terminal"] .deck-btn,
+body[data-theme="terminal"] .tiny-btn {
+  border: 1px solid rgba(215,220,227,.26);
+  background: transparent;
+  box-shadow: none;
+}
+body[data-theme="terminal"] .deck-btn:hover,
+body[data-theme="terminal"] .tiny-btn:hover { background: rgba(127,216,143,.12); border-color: #7fd88f; }
+body[data-theme="terminal"] .progress-wrap { background: transparent; border: 1px solid rgba(215,220,227,.26); }
+body[data-theme="terminal"] .progress-fill {
+  background: repeating-linear-gradient(90deg, #7fd88f 0 5px, transparent 5px 7px);
+  box-shadow: none;
+}
+body[data-theme="terminal"] .progress-knob:not(.custom-image) { width: 3px; background: #e0b341; box-shadow: none; }
+
+/* --- Metro Line: the progress bar as a route --------------------------- */
+html body[data-theme="metroline"] .preview-panel,
+html body[data-theme="metroline"] .center-panel,
+html body[data-theme="metroline"] .chip-panel {
+  border-radius: 4px;
+  border: 1px solid rgba(28,37,48,.16);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(28,37,48,.08);
+}
+html body[data-theme="metroline"] .zone-head {
+  background: #1c2530;
+  border-bottom: 0;
+  color: #ffffff;
+  letter-spacing: .16em;
+}
+html body[data-theme="metroline"] .chip {
+  border-radius: 3px;
+  border: 1px solid rgba(28,37,48,.16);
+  background: #ffffff;
+  box-shadow: none;
+}
+html body[data-theme="metroline"] .chip::after {
+  height: auto;
+  width: 5px;
+  inset: 0 auto 0 0;
+  opacity: 1;
+  background: var(--accent);
+}
+html body[data-theme="metroline"] .chip.onboard::after { background: var(--accent2); }
+html body[data-theme="metroline"] .chip-body { padding-left: 13px; }
+html body[data-theme="metroline"] .tiny-btn,
+html body[data-theme="metroline"] .mini-action,
+html body[data-theme="metroline"] .deck-btn { border-radius: 3px; }
+html body[data-theme="metroline"] .progress-wrap {
+  border-radius: 999px;
+  border: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 46px, rgba(28,37,48,.30) 46px 47px),
+    rgba(28,37,48,.14);
+}
+html body[data-theme="metroline"] .progress-fill { border-radius: 999px; background: var(--accent); box-shadow: none; }
+html body[data-theme="metroline"] .progress-knob:not(.custom-image) {
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--accent), 0 1px 4px rgba(0,0,0,.25);
+}
+html body[data-theme="metroline"] .status-pill { border-radius: 3px; }
+
+/* --- Pixel Quest: a 16-bit heads-up display ---------------------------- */
+body[data-theme="pixelquest"] .chip-thumb,
+body[data-theme="pixelquest"] .tg-art { image-rendering: pixelated; }
+body[data-theme="pixelquest"] .track-title,
+body[data-theme="pixelquest"] .chip-title,
+body[data-theme="pixelquest"] .zone-head,
+body[data-theme="pixelquest"] .status-pill,
+body[data-theme="pixelquest"] .deck-btn {
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  letter-spacing: .02em;
+}
+body[data-theme="pixelquest"] .preview-panel,
+body[data-theme="pixelquest"] .center-panel,
+body[data-theme="pixelquest"] .chip-panel,
+body[data-theme="pixelquest"] .chip-zone,
+body[data-theme="pixelquest"] .chip,
+body[data-theme="pixelquest"] .deck-btn,
+body[data-theme="pixelquest"] .tiny-btn,
+body[data-theme="pixelquest"] .mini-action,
+body[data-theme="pixelquest"] .step-btn,
+body[data-theme="pixelquest"] .status-pill,
+body[data-theme="pixelquest"] .time-box,
+body[data-theme="pixelquest"] .vol-box,
+body[data-theme="pixelquest"] .speed-stepper,
+body[data-theme="pixelquest"] .progress-wrap,
+body[data-theme="pixelquest"] .progress-fill,
+body[data-theme="pixelquest"] .progress-knob:not(.custom-image) { border-radius: 0; }
+body[data-theme="pixelquest"] .preview-panel,
+body[data-theme="pixelquest"] .center-panel,
+body[data-theme="pixelquest"] .chip-panel {
+  border: 3px solid #f4f4f4;
+  background: rgba(38,43,68,.96);
+  box-shadow: 0 0 0 3px #1a1c2c, 6px 6px 0 rgba(0,0,0,.35);
+}
+body[data-theme="pixelquest"] .zone-head {
+  background: #1a1c2c;
+  border-bottom: 3px solid #f4f4f4;
+  color: #ffcd75;
+}
+body[data-theme="pixelquest"] .chip {
+  border: 2px solid rgba(244,244,244,.55);
+  background: rgba(26,28,44,.86);
+  box-shadow: inset -2px -2px 0 rgba(0,0,0,.35), inset 2px 2px 0 rgba(255,255,255,.10);
+}
+body[data-theme="pixelquest"] .deck-btn,
+body[data-theme="pixelquest"] .tiny-btn {
+  border: 2px solid #f4f4f4;
+  background: #38405f;
+  box-shadow: inset -2px -2px 0 rgba(0,0,0,.4), inset 2px 2px 0 rgba(255,255,255,.14);
+}
+body[data-theme="pixelquest"] .deck-btn:hover,
+body[data-theme="pixelquest"] .tiny-btn:hover { transform: none; background: #47517a; }
+body[data-theme="pixelquest"] .progress-wrap { border: 2px solid #f4f4f4; background: #12131f; }
+body[data-theme="pixelquest"] .progress-fill {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 10px, rgba(0,0,0,.55) 10px 12px),
+    linear-gradient(180deg, #6ee06a, #38b764);
+  box-shadow: none;
+}
+body[data-theme="pixelquest"] .progress-knob:not(.custom-image) { width: 6px; background: #ffcd75; box-shadow: none; }
+
+/* --- Hologram: a projection, not a panel ------------------------------- */
+body[data-theme="hologram"] .preview-panel,
+body[data-theme="hologram"] .center-panel,
+body[data-theme="hologram"] .chip-panel {
+  border-radius: 16px;
+  border: 1px solid rgba(53,230,255,.34);
+  background:
+    repeating-linear-gradient(180deg, rgba(53,230,255,.05) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, rgba(8,22,34,.80), rgba(4,12,20,.90));
+  box-shadow: 0 0 26px rgba(53,230,255,.16), inset 0 -18px 34px rgba(53,230,255,.10);
+}
+body[data-theme="hologram"] .zone-head {
+  background: linear-gradient(180deg, rgba(53,230,255,.18), transparent);
+  border-bottom: 1px solid rgba(53,230,255,.34);
+  color: #9ff2ff;
+  text-shadow: 0 0 8px rgba(53,230,255,.5);
+}
+body[data-theme="hologram"] .track-title { text-shadow: 1px 0 6px rgba(255,95,208,.45), -1px 0 6px rgba(53,230,255,.45); }
+body[data-theme="hologram"] .chip {
+  border-radius: 12px;
+  border-color: rgba(53,230,255,.30);
+  background: linear-gradient(180deg, rgba(53,230,255,.10), rgba(4,12,20,.55));
+  box-shadow: inset 0 0 18px rgba(53,230,255,.10);
+}
+body[data-theme="hologram"] .tiny-btn,
+body[data-theme="hologram"] .mini-action,
+body[data-theme="hologram"] .deck-btn { border-radius: 999px; border-color: rgba(53,230,255,.36); }
+body[data-theme="hologram"] .deck-btn.primary {
+  background: linear-gradient(135deg, rgba(53,230,255,.45), rgba(255,95,208,.35));
+  border-color: rgba(53,230,255,.6);
+  color: #04121a;
+}
+body[data-theme="hologram"] .progress-wrap { border-radius: 999px; background: rgba(53,230,255,.10); }
+body[data-theme="hologram"] .progress-fill {
+  background: linear-gradient(90deg, #35e6ff, #ff5fd0);
+  box-shadow: 0 0 16px rgba(53,230,255,.6);
+}
+body[data-theme="hologram"] .progress-knob:not(.custom-image) { box-shadow: 0 0 14px rgba(53,230,255,.9), 0 0 26px rgba(255,95,208,.6); }
+
+/* --- Newsprint: set in lead -------------------------------------------- */
+html body[data-theme="newsprint"] .track-title,
+html body[data-theme="newsprint"] .chip-title,
+html body[data-theme="newsprint"] .zone-head,
+html body[data-theme="newsprint"] .status-pill,
+html body[data-theme="newsprint"] .track-sub,
+html body[data-theme="newsprint"] .chip-sub {
+  font-family: "Iowan Old Style", "Georgia", "Times New Roman", serif;
+}
+html body[data-theme="newsprint"] .preview-panel,
+html body[data-theme="newsprint"] .center-panel,
+html body[data-theme="newsprint"] .chip-panel,
+html body[data-theme="newsprint"] .chip-zone,
+html body[data-theme="newsprint"] .chip,
+html body[data-theme="newsprint"] .tiny-btn,
+html body[data-theme="newsprint"] .mini-action,
+html body[data-theme="newsprint"] .deck-btn,
+html body[data-theme="newsprint"] .step-btn,
+html body[data-theme="newsprint"] .status-pill,
+html body[data-theme="newsprint"] .progress-wrap,
+html body[data-theme="newsprint"] .progress-fill { border-radius: 0; }
+html body[data-theme="newsprint"] .preview-panel,
+html body[data-theme="newsprint"] .center-panel,
+html body[data-theme="newsprint"] .chip-panel {
+  border: 1px solid rgba(22,20,15,.34);
+  background:
+    radial-gradient(rgba(22,20,15,.05) 0.7px, transparent 0.8px) 0 0 / 4px 4px,
+    linear-gradient(180deg, rgba(252,250,244,.98), rgba(244,241,232,.98));
+  box-shadow: none;
+}
+html body[data-theme="newsprint"] .zone-head {
+  background: transparent;
+  border-top: 3px solid #16140f;
+  border-bottom: 1px solid #16140f;
+  color: #16140f;
+  letter-spacing: .2em;
+}
+html body[data-theme="newsprint"] .chip {
+  border: 1px solid rgba(22,20,15,.34);
+  background: rgba(252,250,244,.96);
+  box-shadow: none;
+}
+html body[data-theme="newsprint"] .chip::after { height: 2px; background: #16140f; opacity: 1; }
+html body[data-theme="newsprint"] .tiny-btn,
+html body[data-theme="newsprint"] .mini-action,
+html body[data-theme="newsprint"] .deck-btn {
+  border: 1px solid #16140f;
+  background: transparent;
+  box-shadow: none;
+}
+html body[data-theme="newsprint"] .progress-wrap { background: rgba(22,20,15,.14); border: 1px solid rgba(22,20,15,.34); }
+html body[data-theme="newsprint"] .progress-fill { background: #16140f; box-shadow: none; }
+html body[data-theme="newsprint"] .progress-knob:not(.custom-image) { border-radius: 0; width: 4px; background: #b3231f; box-shadow: none; }
+html body[data-theme="newsprint"] .status-pill { border: 1px solid #16140f; background: transparent; color: #b3231f; }
+
+/* =========================================================================
+ * Things that were being cut rather than shaped. Measured across every theme
+ * at the five sizes the deck actually runs at (full, low, mini, side dock,
+ * narrow), so these are the places where the layout was clipping something
+ * mid-shape instead of laying it out.
+ * ====================================================================== */
+
+/* 1. The top bar overflowed the shell. At a side dock - which is a seventh of
+ *    the screen, so 366px on a 2560 monitor - the row needed 462px for its
+ *    buttons and had 213px, and the shell simply cut the rest off: DOCK,
+ *    SPACE, PIN, MIN and close were all sliced or gone. Close was clipped at
+ *    every width up to 760px. The window controls now cannot shrink, and the
+ *    things that can give way do so in order: the wordmark, then the version
+ *    pill, then the clock readout (the big clock still shows the time), then
+ *    the button padding. */
+.deck-topline { gap: 6px; }
+.brand { flex: 1 1 auto; min-width: 0; }
+/* The actions never give way; the wordmark beside them does. Letting the row
+   shrink only moved the slicing from the shell edge to inside the row. */
+.top-actions { flex: 0 0 auto; }
+#pinBtn, #minBtn, #closeBtn { flex: 0 0 auto; }
+
+body.is-narrow .deck-topline { padding: 0 6px 0 7px; }
+body.is-narrow .top-actions { gap: 3px; }
+/* A side dock is a seventh of the screen wide and the full height of it, so
+   the row that will not fit across gets a second line rather than an ellipsis.
+   Only where there is height to spare for it - a short deck keeps one line. */
+body.is-narrow:not(.is-low):not(.is-mini) .deck-topline {
+  height: auto;
+  min-height: 22px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+body.is-narrow:not(.is-low):not(.is-mini) .top-actions {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+/* deck-main sizes itself off a 22px title bar. With the actions on a second
+   line that bar is 42px, and the body ran 21px past the bottom of the shell
+   and was cut there. Pin the two-line height so the subtraction stays true. */
+body.is-narrow:not(.is-low):not(.is-mini) .deck-topline { height: 42px; min-height: 42px; }
+body.is-narrow:not(.is-low):not(.is-mini) .deck-main { height: calc(100vh - 42px); }
+/* Where there is no room for a second line, the labelled buttons trim
+   themselves with an ellipsis. The window controls are not in that group and
+   are never the thing that gives. */
+body.is-narrow.is-low .top-actions,
+body.is-narrow.is-mini .top-actions { flex: 0 1 auto; min-width: 0; }
+body.is-narrow.is-low #statusText, body.is-narrow.is-mini #statusText,
+body.is-narrow.is-low #langBtn, body.is-narrow.is-mini #langBtn,
+body.is-narrow.is-low #dockBtn, body.is-narrow.is-mini #dockBtn,
+body.is-narrow.is-low #reserveBtn, body.is-narrow.is-mini #reserveBtn {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The wordmark is a bare text node, so zeroing the font on the row and giving
+   it back to the chip is what takes the words out without taking the chip. */
+body.is-narrow .brand { font-size: 0; gap: 5px; }
+body.is-narrow .brand .theme-chip { font-size: 10px; }
+body.is-narrow .brand .version-pill { display: none; }
+body.is-narrow #deckClock { display: none; }
+body.is-narrow .top-actions .tiny-btn { padding: 0 5px; letter-spacing: 0; }
+body.is-narrow #statusText { min-width: 32px; padding: 1px 4px; }
+
+/* 2. The scrub knob was cut by the deck body at either end of the track. The
+ *    knob is centred on its position, so at 0% half of it sits outside the
+ *    track, and in the shorter layouts that is further out than the panel's
+ *    padding. Inset the track by the knob's radius instead of letting the
+ *    circle be sliced into a crescent. */
+body.is-slim .progress-knob,
+body.is-narrow .progress-knob { width: 18px; height: 18px; }
+body.is-slim .progress-wrap,
+body.is-narrow .progress-wrap { margin-left: 5px; margin-right: 5px; }
+
+/* 3. The fill kept a rounded left cap and square right one whatever the track
+ *    was shaped like, so on a square-ended track (Blueprint, Zen Ma) it sat
+ *    inside with rounded corners, and on a pill track its square corner rode
+ *    over the rounded cap at the end of a song. Inheriting the track's own
+ *    radius makes the fill the same shape as the thing it fills, in every
+ *    theme, including the ones added later. */
+.progress-fill { border-radius: inherit; }
+
+/* 4. Chips cast a soft shadow into a row that hid its vertical overflow, so
+ *    the shadow stopped in a straight line a few pixels below the chip. Give
+ *    the row the couple of pixels the shadow needs. */
+.chip-row { padding-top: 6px; padding-bottom: 6px; }
+/* The theme chip was being sliced by the wordmark's own overflow rather than
+   trimming its label, which is what its inner span is set up to do. */
+.brand .theme-chip { flex: 0 1 auto; min-width: 0; }

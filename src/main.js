@@ -1456,6 +1456,60 @@ const YT_VIEW_BRIDGE = `(() => {
   // an ad pod runs several in a row, each with its own button.
   setInterval(() => { if (adShowing()) skipAd(); }, 250);
 
+  // Running the ad out instead of waiting for it. An ad plays in the same media
+  // element as the track, so its clock answers to playbackRate exactly like any
+  // other video: a 30s pre-roll measured 4.25s of wall time at 16x. The player
+  // puts the rate back whenever the pod moves to its next ad, so this holds the
+  // rate rather than setting it once.
+  //
+  // The whole risk of this feature is the rate outliving the ad and the deck's
+  // own music playing back at 16x, so the driver is written to fail closed:
+  // - the rate is only ever raised while the ad markers are up,
+  // - it is put back the instant they go, from a 100ms loop rather than the
+  //   500ms report tick, so the exposure is a tenth of a second at worst,
+  // - a break that never clears (the markers do occasionally stick) gives up
+  //   after AD_DRIVE_CAP and will not drive again until they have been gone,
+  // - and anything longer than an ad could plausibly be is not driven at all.
+  const AD_RATE = 16;
+  const AD_DRIVE_CAP = 15000;
+  const AD_MAX_DURATION = 300;
+  let adSpeedEnabled = true;
+  let deckRate = 1;
+  let driving = false;
+  let driveStartedAt = 0;
+  let driveGaveUp = false;
+  let adMuted = false;
+  const adLooksReal = (v) => {
+    if (!v) return false;
+    // A stuck marker over a four-minute track must never be taken for an ad.
+    if (isFinite(v.duration) && v.duration > AD_MAX_DURATION) return false;
+    return true;
+  };
+  const stopDriving = (v) => {
+    driving = false;
+    if (!v) return;
+    try { if (Math.abs(v.playbackRate - deckRate) > 0.01) v.playbackRate = deckRate; } catch (e) {}
+    if (adMuted) { adMuted = false; try { v.muted = false; } catch (e) {} }
+  };
+  const driveAd = () => {
+    const v = pick();
+    const on = adShowing();
+    if (!on) {
+      if (driving) stopDriving(v);
+      driveGaveUp = false;
+      return;
+    }
+    if (!adSpeedEnabled || driveGaveUp || !adLooksReal(v)) { if (driving) stopDriving(v); return; }
+    if (!driving) { driving = true; driveStartedAt = Date.now(); }
+    if (Date.now() - driveStartedAt > AD_DRIVE_CAP) { driveGaveUp = true; stopDriving(v); return; }
+    if (!v) return;
+    // Sixteen times the speed is sixteen times the noise, so it goes silent
+    // while it runs. The deck's own volume is untouched underneath.
+    if (!v.muted) { try { v.muted = true; adMuted = true; } catch (e) {} }
+    if (Math.abs(v.playbackRate - AD_RATE) > 0.01) { try { v.playbackRate = AD_RATE; } catch (e) {} }
+  };
+  setInterval(driveAd, 100);
+
   // --- Volume --------------------------------------------------------------
   // YouTube normalises loudness per track by writing its own gain onto the
   // media element - measured at 0.54, 0.90, 0.98 and 0.98 across four tracks.
@@ -1556,6 +1610,7 @@ const YT_VIEW_BRIDGE = `(() => {
     // where the tick alone left one frame at YouTube's own level.
     try {
       v.addEventListener('volumechange', () => syncVolume(v));
+      v.addEventListener('ratechange', () => { if (driving) driveAd(); });
       ['loadstart', 'loadedmetadata', 'canplay', 'play', 'playing'].forEach((name) => {
         v.addEventListener(name, () => syncVolume(v));
       });
@@ -1742,13 +1797,16 @@ const YT_VIEW_BRIDGE = `(() => {
     else if (v.ended === false) { lastState = ''; }
   }, 500);
   window.__deckCmd = (cmd, value) => {
+    // Whether ads are handled at all is the deck's setting, and it can arrive
+    // before there is a player, so it is answered before the pick() below.
+    if (cmd === 'adspeed') { adSpeedEnabled = value !== false; if (!adSpeedEnabled) stopDriving(pick()); return true; }
     // Volume is remembered whether or not the page has a player yet, so a
     // setting that arrives during the load is applied to the first frame
     // instead of after it.
     if (cmd === 'volume') {
       deckVolume = Math.min(1, Math.max(0, Number(value) / 100));
       const target = pick();
-      if (target) { target.muted = false; bindMedia(target); syncVolume(target); }
+      if (target) { if (!adMuted) target.muted = false; bindMedia(target); syncVolume(target); }
       return true;
     }
     const v = pick();
@@ -1756,7 +1814,13 @@ const YT_VIEW_BRIDGE = `(() => {
     if (cmd === 'play') { v.play().catch(() => {}); return true; }
     if (cmd === 'pause') { v.pause(); return true; }
     if (cmd === 'toggle') { if (v.paused) v.play().catch(() => {}); else v.pause(); return !v.paused; }
-    if (cmd === 'rate') { try { v.playbackRate = Number(value) || 1; } catch (e) {} return true; }
+    if (cmd === 'rate') {
+      deckRate = Number(value) || 1;
+      // Writing it now would be undone by the driver anyway, and would show up
+      // as a stutter in the ad.
+      if (!driving) { try { v.playbackRate = deckRate; } catch (e) {} }
+      return true;
+    }
     if (cmd === 'seek') { try { v.currentTime = Number(value) || 0; } catch (e) {} return true; }
     return false;
   };
@@ -1945,8 +2009,11 @@ function ensureYtView() {
         // Hand the new document the deck's settings straight away; the bridge
         // holds them until a player exists. Until this lands the audio gate is
         // still shut, so nothing is ever audible at YouTube's own level first.
-        if (ytLastVolume === null && ytLastRate === null) return null;
-        const calls = [];
+        const calls0 = ['window.__deckCmd("adspeed", ' + JSON.stringify(adHandlingEnabled) + ')'];
+        if (ytLastVolume === null && ytLastRate === null) {
+          return ytView?.webContents.executeJavaScript(calls0.join(';') + ';true');
+        }
+        const calls = calls0.slice();
         if (ytLastVolume !== null) calls.push('window.__deckCmd(\'volume\', ' + JSON.stringify(ytLastVolume) + ')');
         if (ytLastRate !== null) calls.push('window.__deckCmd(\'rate\', ' + JSON.stringify(ytLastRate) + ')');
         return ytView?.webContents.executeJavaScript(calls.join(';') + ';true');
@@ -2057,6 +2124,11 @@ ipcMain.handle('yt:setViewVisible', (_event, visible) => {
 ipcMain.handle('yt:setAdHandling', (_event, enabled) => {
   adHandlingEnabled = enabled !== false;
   installAdFilter();
+  try {
+    ytView?.webContents.executeJavaScript(
+      'window.__deckCmd && window.__deckCmd("adspeed", ' + JSON.stringify(adHandlingEnabled) + ');true'
+    ).catch(() => {});
+  } catch {}
   return { enabled: adHandlingEnabled, blocked: adBlockCount, skipped: adSkipCount };
 });
 
