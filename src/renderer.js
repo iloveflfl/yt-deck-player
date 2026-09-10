@@ -4031,6 +4031,9 @@ async function startYouTubeMode(item) {
   // audible at YouTube's level, which on a quiet deck setting is a burst.
   ytSendCommand('volume', state.playback.volume);
   ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1));
+  // Lets the view tell an ad from the track by length, so a marker that sticks
+  // cannot run the song itself forward at speed.
+  ytSendCommand('trackseconds', Number(item && item.duration) || 0);
   // Repeated once the page has settled, in case the first pair landed before
   // the bridge was installed.
   window.setTimeout(() => {

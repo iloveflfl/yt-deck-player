@@ -46,6 +46,7 @@ let ytViewDressed = false;
 let ytWantedVideoId = null;
 let ytLastVolume = null;
 let ytLastRate = null;
+let ytLastTrackSeconds = null;
 // YouTube reads and the in-deck view share one partition, kept separate from
 // the deck's own storage. It holds only ordinary browsing state (consent,
 // visitor id); the app never signs in to any account.
@@ -1475,6 +1476,9 @@ const YT_VIEW_BRIDGE = `(() => {
   const AD_MAX_DURATION = 300;
   let adSpeedEnabled = true;
   let deckRate = 1;
+  // What the deck says the current track runs to, in seconds; 0 when it does
+  // not know. An ad is not that long, so anything that is gets left alone.
+  let trackSeconds = 0;
   let driving = false;
   let driveStartedAt = 0;
   let driveGaveUp = false;
@@ -1483,6 +1487,16 @@ const YT_VIEW_BRIDGE = `(() => {
     if (!v) return false;
     // A stuck marker over a four-minute track must never be taken for an ad.
     if (isFinite(v.duration) && v.duration > AD_MAX_DURATION) return false;
+    // And the surer test: if what is loaded is as long as the track the deck
+    // asked for, it is the track, whatever the markers claim. Pre-rolls are
+    // still driven - an ad's duration is nothing like the song's - and a deck
+    // that has not said (0) falls back to the markers and the cap.
+    // The playlist's seconds and the player's own can differ by a second or so
+    // of rounding, and the tolerance has to be wider than that drift or the
+    // guard quietly stops engaging. Nothing an ad could be is within 2% of a
+    // song's length, so there is nothing to collide with up here.
+    if (trackSeconds > 0 && isFinite(v.duration)
+        && Math.abs(v.duration - trackSeconds) <= Math.max(2, trackSeconds * 0.02)) return false;
     return true;
   };
   const stopDriving = (v) => {
@@ -1800,6 +1814,8 @@ const YT_VIEW_BRIDGE = `(() => {
     // Whether ads are handled at all is the deck's setting, and it can arrive
     // before there is a player, so it is answered before the pick() below.
     if (cmd === 'adspeed') { adSpeedEnabled = value !== false; if (!adSpeedEnabled) stopDriving(pick()); return true; }
+    // Arrives before there is a player, like volume, so it is answered here.
+    if (cmd === 'trackseconds') { trackSeconds = Math.max(0, Number(value) || 0); return true; }
     // Volume is remembered whether or not the page has a player yet, so a
     // setting that arrives during the load is applied to the first frame
     // instead of after it.
@@ -2010,6 +2026,7 @@ function ensureYtView() {
         // holds them until a player exists. Until this lands the audio gate is
         // still shut, so nothing is ever audible at YouTube's own level first.
         const calls0 = ['window.__deckCmd("adspeed", ' + JSON.stringify(adHandlingEnabled) + ')'];
+        if (ytLastTrackSeconds !== null) calls0.push('window.__deckCmd("trackseconds", ' + JSON.stringify(ytLastTrackSeconds) + ')');
         if (ytLastVolume === null && ytLastRate === null) {
           return ytView?.webContents.executeJavaScript(calls0.join(';') + ';true');
         }
@@ -2104,6 +2121,7 @@ ipcMain.handle('yt:play', async (_event, videoId) => {
 ipcMain.handle('yt:command', async (_event, command, value) => {
   if (command === 'volume' && Number.isFinite(Number(value))) ytLastVolume = Number(value);
   if (command === 'rate' && Number.isFinite(Number(value))) ytLastRate = Number(value);
+  if (command === 'trackseconds' && Number.isFinite(Number(value))) ytLastTrackSeconds = Number(value);
   if (!ytView) return false;
   try {
     return await ytView.webContents.executeJavaScript(`window.__deckCmd && window.__deckCmd(${JSON.stringify(command)}, ${JSON.stringify(value ?? null)})`);
