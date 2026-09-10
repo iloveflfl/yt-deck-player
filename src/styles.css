@@ -3127,3 +3127,112 @@ body.is-narrow .progress-wrap { margin-left: 5px; margin-right: 5px; }
 /* The theme chip was being sliced by the wordmark's own overflow rather than
    trimming its label, which is what its inner span is set up to do. */
 .brand .theme-chip { flex: 0 1 auto; min-width: 0; }
+
+
+/* =========================================================================
+ * Theme art you can actually see, and a mascot to go with it.
+ *
+ * The art layer was painted at 8,24 260x194 - which is exactly underneath the
+ * preview panel at 9,31 333x190. Every themed illustration in the app was
+ * being drawn behind an opaque panel: the gallery card showed a picture and
+ * applying the theme showed none of it.
+ *
+ * Both layers are real elements rather than pseudo-elements, because
+ * ::before and ::after on the centre panel are already spoken for - Blueprint
+ * draws its corner marks with them and CRT Phosphor its scanlines - and
+ * quietly winning that fight would have broken two themes to fix another.
+ * ====================================================================== */
+.center-panel { position: relative; }
+/* The panel's own children have to be positioned, or the layers below would
+   paint over the text. No offsets, so nothing moves. */
+.center-panel > .track-row,
+.center-panel > .progress-wrap,
+.center-panel > .control-row { position: relative; z-index: 1; }
+
+.theme-art-layer,
+.theme-mascot {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+/* The illustration, carried as artwork behind the text. */
+.theme-art-layer {
+  inset: 0;
+  background-image: var(--theme-art, none);
+  background-position: var(--theme-art-panel-position, right -2% bottom -10%);
+  background-size: var(--theme-art-panel-size, auto 155%);
+  /* Without this the illustration ends on a straight vertical edge partway
+     across the panel and reads as a pasted rectangle rather than as artwork. */
+  -webkit-mask-image: linear-gradient(to left, #000 34%, transparent 96%);
+  mask-image: linear-gradient(to left, #000 34%, transparent 96%);
+}
+body.art-theme .theme-art-layer { opacity: var(--theme-art-panel-opacity, 0); }
+
+/* The character. It sits in the gap between the track title and the clock -
+   the one part of the centre panel with nothing in it at any width. */
+.theme-mascot {
+  position: static;
+  flex: 0 0 auto;
+  align-self: stretch;
+  /* Stands next to the clock rather than adrift in the middle of the row. */
+  margin-left: auto;
+  width: clamp(34px, 5vw, 96px);
+  min-height: 30px;
+  background-image: var(--theme-mascot, none);
+  background-position: center bottom;
+  background-size: contain;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.30));
+}
+body.has-mascot .theme-mascot { opacity: 1; }
+
+/* Small decks have no room to spare, and the character would be standing on
+   the controls rather than beside them. */
+body.is-mini .theme-art-layer,
+body.is-slim .theme-art-layer { opacity: 0 !important; }
+/* Below these sizes the row has no width to give, and the character would be
+   taking it from the track title. */
+body.is-mini .theme-mascot,
+body.is-slim .theme-mascot,
+body.is-low .theme-mascot,
+body.is-narrow .theme-mascot { display: none; }
+
+/* --- the animations ---------------------------------------------------- */
+/* Each moves the way the thing it is would move, and all of them are slow on
+   purpose: this is a deck left running while someone works, and something
+   twitching in the corner of the eye all day is the opposite of pleasant. */
+@keyframes mascot-float   { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-7px) rotate(2deg); } }
+@keyframes mascot-bob     { 0%,100% { transform: translateY(0); }               50% { transform: translateY(-4px); } }
+@keyframes mascot-squish  { 0%,100% { transform: scale(1, 1); }                 50% { transform: scale(1.06, 0.94); } }
+@keyframes mascot-waddle  { 0%,100% { transform: rotate(-4deg); }               50% { transform: rotate(4deg); } }
+@keyframes mascot-flicker { 0%,46%,54%,100% { opacity: 1; }                     50% { opacity: .5; } }
+@keyframes mascot-drift   { 0%,100% { transform: translateX(0); }               50% { transform: translateX(-7px); } }
+@keyframes mascot-hop     { 0%,64%,100% { transform: translateY(0); }           72% { transform: translateY(-8px); } 80% { transform: translateY(0); } }
+
+body[data-theme="astrocat"]     .theme-mascot { animation: mascot-float 6.5s ease-in-out infinite; }
+body[data-theme="cozyyarn"]     .theme-mascot { animation: mascot-bob 5.5s ease-in-out infinite; }
+body[data-theme="bakery"]       .theme-mascot { animation: mascot-squish 4.5s ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="stickerdiary"] .theme-mascot { animation: mascot-waddle 6s ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="hologram"]     .theme-mascot { animation: mascot-flicker 4s steps(1, end) infinite; }
+body[data-theme="pixelquest"]   .theme-mascot { animation: mascot-hop 5s steps(8, end) infinite; image-rendering: pixelated; }
+body[data-theme="mochi"]        .theme-mascot { animation: mascot-squish 5s ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="boba"]         .theme-mascot { animation: mascot-bob 6s ease-in-out infinite; }
+body[data-theme="penguin"]      .theme-mascot { animation: mascot-waddle 5s ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="cloudsoda"]    .theme-mascot { animation: mascot-drift 9s ease-in-out infinite; }
+body[data-theme="velvetkuro"]   .theme-mascot { animation: mascot-float 5.5s ease-in-out infinite; }
+
+/* A stopped deck has a still mascot: the motion is what says "this is on". */
+body:not(.deck-playing) .theme-mascot { animation-play-state: paused; }
+
+/* Asked for less motion: a still character, not no character. */
+@media (prefers-reduced-motion: reduce) {
+  .theme-mascot { animation: none !important; }
+}
+
+/* Riso Press paints its zone head near-black, but the muted colour beside the
+   title is the one chosen for its paper-white panels, so the track count sat
+   at 2.7:1 on that bar. It is the only place in the theme that reverses. */
+html body[data-theme="risopress"] .zone-head .muted { color: #b9b3a4; }

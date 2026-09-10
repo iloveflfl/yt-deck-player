@@ -420,20 +420,20 @@ const THEMES = {
   zenma: { name: 'Zen Ma', light: true, bg0: '#f3ece0', bg1: '#e9e0cf', panel: 'rgba(250,246,238,.94)', panel2: 'rgba(243,236,224,.96)', text: '#3a3730', muted: '#8b8677', accent: '#8a8a6e', accent2: '#c4622a', good: '#6f7f5e', art: 'assets/zen-sand.png', artOpacity: 0.24, artSize: 'auto 92%', artPosition: 'left center', line: 'rgba(58,55,48,0.14)' },
   comicpop: { name: 'Comic Pop', light: true, bg0: '#fff8e6', bg1: '#ffeec4', panel: 'rgba(255,255,255,.97)', panel2: 'rgba(255,248,230,.98)', text: '#0a0a0a', muted: '#5a5a5a', accent: '#e01b1b', accent2: '#1652d6', good: '#f5c400', art: 'assets/comic-pop.png', artOpacity: 0.20, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(10,10,10,0.55)' },
   aquagel: { name: 'Aqua Gel', light: true, bg0: '#dff4fb', bg1: '#bfe8f6', panel: 'rgba(255,255,255,.70)', panel2: 'rgba(228,247,253,.78)', text: '#093344', muted: '#4b7f95', accent: '#00a6d6', accent2: '#0cd3d3', good: '#22c08a', art: 'assets/aqua-gel.png', artOpacity: 0.26, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(0,166,214,0.26)' },
-  mochi: { name: 'Mochi Mochi', light: true, bg0: '#f7f1ef', bg1: '#e7dbd8', panel: 'rgba(255,253,252,.95)', panel2: 'rgba(248,241,239,.96)', text: '#4b3a3c', muted: '#907a7c', accent: '#d0778c', accent2: '#7f9c7a', good: '#7fa87c', art: 'assets/mochi.png', artOpacity: 0.18, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(208,119,140,0.20)' },
-  boba: { name: 'Brown Sugar Boba', bg0: '#150e0a', bg1: '#2b1c12', panel: 'rgba(50,32,22,.92)', panel2: 'rgba(30,19,13,.95)', text: '#f7e7cf', muted: '#b0947a', accent: '#e0a45c', accent2: '#efdcc0', good: '#9ec27a', art: 'assets/boba.png', artOpacity: 0.14, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(224,164,92,0.26)' },
-  penguin: { name: 'Penguin Cafe', light: true, bg0: '#ecf6f5', bg1: '#d8ecea', panel: 'rgba(255,255,255,.96)', panel2: 'rgba(240,249,248,.97)', text: '#1f2c33', muted: '#63808a', accent: '#ff7a45', accent2: '#2b3a44', good: '#2f9e8a', art: 'assets/penguin.png', artOpacity: 0.20, artSize: 'auto 84%', artPosition: 'left center', line: 'rgba(43,58,68,0.18)' },
-  cloudsoda: { name: 'Cloud Soda', light: true, bg0: '#e9f2ff', bg1: '#f7e7f3', panel: 'rgba(255,255,255,.90)', panel2: 'rgba(246,250,255,.94)', text: '#3b4a6b', muted: '#7483aa', accent: '#5b8fe0', accent2: '#e8a92e', good: '#5cbfa6', art: 'assets/cloud-soda.png', artOpacity: 0.24, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(91,143,224,0.26)' },
-  velvetkuro: { name: 'Velvet Kuro', bg0: '#08060f', bg1: '#181033', panel: 'rgba(26,16,48,.92)', panel2: 'rgba(14,8,28,.95)', text: '#f4e8ff', muted: '#a48fc4', accent: '#ff5fa2', accent2: '#dcb0ff', good: '#8de6c4', art: 'assets/velvet-kuro.png', artOpacity: 0.22, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(255,95,162,0.28)' },
-  stickerdiary: { name: 'Sticker Diary', light: true, bg0: '#fdf8f0', bg1: '#f4e9da', panel: 'rgba(255,253,248,.96)', panel2: 'rgba(250,244,234,.97)', text: '#4a3f38', muted: '#8d7b6c', accent: '#ef7fa2', accent2: '#5fbdae', good: '#86b45c', art: 'assets/sticker-diary.png', artOpacity: 0.16, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(239,127,162,0.26)' },
-  astrocat: { name: 'Astro Cat', bg0: '#060a18', bg1: '#111c3a', panel: 'rgba(20,30,58,.90)', panel2: 'rgba(11,18,38,.94)', text: '#e8eeff', muted: '#8f9dc8', accent: '#7ce0c8', accent2: '#ffb38a', good: '#9ad6ff', art: 'assets/astro-cat.png', artOpacity: 0.26, artSize: 'auto 90%', artPosition: 'left center', line: 'rgba(124,224,200,0.26)' },
-  cozyyarn: { name: 'Cozy Yarn', light: true, bg0: '#f6f0e7', bg1: '#e9dccb', panel: 'rgba(253,249,242,.96)', panel2: 'rgba(246,239,229,.97)', text: '#4c4038', muted: '#8d7d6e', accent: '#c9806f', accent2: '#93a577', good: '#7f9a63', art: 'assets/cozy-yarn.png', artOpacity: 0.20, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(201,128,111,0.24)' },
-  bakery: { name: 'Bakery', light: true, bg0: '#fdf6e6', bg1: '#f3e3c6', panel: 'rgba(255,252,244,.96)', panel2: 'rgba(250,242,227,.97)', text: '#4d3a24', muted: '#8f7355', accent: '#d9863a', accent2: '#e2557f', good: '#87a552', art: 'assets/bakery.png', artOpacity: 0.18, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(217,134,58,0.26)' },
+  mochi: { name: 'Mochi Mochi', light: true, bg0: '#f7f1ef', bg1: '#e7dbd8', panel: 'rgba(255,253,252,.95)', panel2: 'rgba(248,241,239,.96)', text: '#4b3a3c', muted: '#907a7c', accent: '#d0778c', accent2: '#7f9c7a', good: '#7fa87c', art: 'assets/mochi.png', artOpacity: 0.18, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(208,119,140,0.20)', mascot: 'assets/mascot-mochi.png' },
+  boba: { name: 'Brown Sugar Boba', bg0: '#150e0a', bg1: '#2b1c12', panel: 'rgba(50,32,22,.92)', panel2: 'rgba(30,19,13,.95)', text: '#f7e7cf', muted: '#b0947a', accent: '#e0a45c', accent2: '#efdcc0', good: '#9ec27a', art: 'assets/boba.png', artOpacity: 0.14, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(224,164,92,0.26)', mascot: 'assets/mascot-boba.png' },
+  penguin: { name: 'Penguin Cafe', light: true, bg0: '#ecf6f5', bg1: '#d8ecea', panel: 'rgba(255,255,255,.96)', panel2: 'rgba(240,249,248,.97)', text: '#1f2c33', muted: '#63808a', accent: '#ff7a45', accent2: '#2b3a44', good: '#2f9e8a', art: 'assets/penguin.png', artOpacity: 0.20, artSize: 'auto 84%', artPosition: 'left center', line: 'rgba(43,58,68,0.18)', mascot: 'assets/mascot-penguin.png' },
+  cloudsoda: { name: 'Cloud Soda', light: true, bg0: '#e9f2ff', bg1: '#f7e7f3', panel: 'rgba(255,255,255,.90)', panel2: 'rgba(246,250,255,.94)', text: '#3b4a6b', muted: '#7483aa', accent: '#5b8fe0', accent2: '#e8a92e', good: '#5cbfa6', art: 'assets/cloud-soda.png', artOpacity: 0.24, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(91,143,224,0.26)', mascot: 'assets/mascot-cloudsoda.png' },
+  velvetkuro: { name: 'Velvet Kuro', bg0: '#08060f', bg1: '#181033', panel: 'rgba(26,16,48,.92)', panel2: 'rgba(14,8,28,.95)', text: '#f4e8ff', muted: '#a48fc4', accent: '#ff5fa2', accent2: '#dcb0ff', good: '#8de6c4', art: 'assets/velvet-kuro.png', artOpacity: 0.22, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(255,95,162,0.28)', mascot: 'assets/mascot-velvetkuro.png' },
+  stickerdiary: { name: 'Sticker Diary', light: true, bg0: '#fdf8f0', bg1: '#f4e9da', panel: 'rgba(255,253,248,.96)', panel2: 'rgba(250,244,234,.97)', text: '#4a3f38', muted: '#8d7b6c', accent: '#ef7fa2', accent2: '#5fbdae', good: '#86b45c', art: 'assets/sticker-diary.png', artOpacity: 0.16, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(239,127,162,0.26)', mascot: 'assets/mascot-stickerdiary.png' },
+  astrocat: { name: 'Astro Cat', bg0: '#060a18', bg1: '#111c3a', panel: 'rgba(20,30,58,.90)', panel2: 'rgba(11,18,38,.94)', text: '#e8eeff', muted: '#8f9dc8', accent: '#7ce0c8', accent2: '#ffb38a', good: '#9ad6ff', art: 'assets/astro-cat.png', artOpacity: 0.26, artSize: 'auto 90%', artPosition: 'left center', line: 'rgba(124,224,200,0.26)', mascot: 'assets/mascot-astrocat.png' },
+  cozyyarn: { name: 'Cozy Yarn', light: true, bg0: '#f6f0e7', bg1: '#e9dccb', panel: 'rgba(253,249,242,.96)', panel2: 'rgba(246,239,229,.97)', text: '#4c4038', muted: '#8d7d6e', accent: '#c9806f', accent2: '#93a577', good: '#7f9a63', art: 'assets/cozy-yarn.png', artOpacity: 0.20, artSize: 'auto 88%', artPosition: 'left center', line: 'rgba(201,128,111,0.24)', mascot: 'assets/mascot-cozyyarn.png' },
+  bakery: { name: 'Bakery', light: true, bg0: '#fdf6e6', bg1: '#f3e3c6', panel: 'rgba(255,252,244,.96)', panel2: 'rgba(250,242,227,.97)', text: '#4d3a24', muted: '#8f7355', accent: '#d9863a', accent2: '#e2557f', good: '#87a552', art: 'assets/bakery.png', artOpacity: 0.18, artSize: 'auto 86%', artPosition: 'left center', line: 'rgba(217,134,58,0.26)', mascot: 'assets/mascot-bakery.png' },
   turntable: { name: 'Turntable', bg0: '#120d09', bg1: '#251a11', panel: 'rgba(40,28,19,.93)', panel2: 'rgba(24,17,11,.96)', text: '#f0e3d2', muted: '#a48c72', accent: '#e0a13c', accent2: '#c96a3a', good: '#a3b96d', art: 'assets/turntable.png', artOpacity: 0.20, artSize: 'auto 92%', artPosition: 'left center', line: 'rgba(224,161,60,0.28)' },
   terminal: { name: 'Terminal', bg0: '#0b0d10', bg1: '#12161c', panel: 'rgba(15,19,25,.96)', panel2: 'rgba(9,12,16,.97)', text: '#d7dce3', muted: '#69727f', accent: '#7fd88f', accent2: '#e0b341', good: '#7fd88f', line: 'rgba(215,220,227,0.22)' },
   metroline: { name: 'Metro Line', light: true, bg0: '#ffffff', bg1: '#eef1f5', panel: 'rgba(255,255,255,.97)', panel2: 'rgba(247,249,252,.98)', text: '#1c2530', muted: '#68737f', accent: '#e8442e', accent2: '#1b62c4', good: '#17a05a', line: 'rgba(28,37,48,0.16)' },
-  pixelquest: { name: 'Pixel Quest', bg0: '#1a1c2c', bg1: '#262b44', panel: 'rgba(41,47,74,.95)', panel2: 'rgba(28,32,52,.97)', text: '#f4f4f4', muted: '#9aa3bd', accent: '#ffcd75', accent2: '#38b764', good: '#41a6f6', art: 'assets/pixel-quest.png', artOpacity: 0.22, artSize: 'auto 92%', artPosition: 'left center', line: 'rgba(255,205,117,0.28)' },
-  hologram: { name: 'Hologram', bg0: '#03060c', bg1: '#06121c', panel: 'rgba(8,22,34,.84)', panel2: 'rgba(4,12,20,.90)', text: '#dff6ff', muted: '#6fa3b8', accent: '#35e6ff', accent2: '#ff5fd0', good: '#7cffcf', art: 'assets/hologram.png', artOpacity: 0.40, artSize: 'auto 96%', artPosition: 'left center', line: 'rgba(53,230,255,0.30)' },
+  pixelquest: { name: 'Pixel Quest', bg0: '#1a1c2c', bg1: '#262b44', panel: 'rgba(41,47,74,.95)', panel2: 'rgba(28,32,52,.97)', text: '#f4f4f4', muted: '#9aa3bd', accent: '#ffcd75', accent2: '#38b764', good: '#41a6f6', art: 'assets/pixel-quest.png', artOpacity: 0.22, artSize: 'auto 92%', artPosition: 'left center', line: 'rgba(255,205,117,0.28)', mascot: 'assets/mascot-pixelquest.png' },
+  hologram: { name: 'Hologram', bg0: '#03060c', bg1: '#06121c', panel: 'rgba(8,22,34,.84)', panel2: 'rgba(4,12,20,.90)', text: '#dff6ff', muted: '#6fa3b8', accent: '#35e6ff', accent2: '#ff5fd0', good: '#7cffcf', art: 'assets/hologram.png', artOpacity: 0.40, artSize: 'auto 96%', artPosition: 'left center', line: 'rgba(53,230,255,0.30)', mascot: 'assets/mascot-hologram.png' },
   newsprint: { name: 'Newsprint', light: true, bg0: '#f7f4ec', bg1: '#e9e4d6', panel: 'rgba(252,250,244,.97)', panel2: 'rgba(244,241,232,.98)', text: '#16140f', muted: '#5c5749', accent: '#b3231f', accent2: '#16140f', good: '#3f6b3a', line: 'rgba(22,20,15,0.30)' },
   glass: { name: 'Glass', bg0: '#0d141d', bg1: '#182534', panel: 'rgba(150,182,216,.13)', panel2: 'rgba(120,150,185,.10)', text: '#eef5fc', muted: '#9fb4c8', accent: '#9fd8ff', accent2: '#c9b7ff', good: '#9fffd8', line: 'rgba(214,235,255,0.22)' },
   robot: { name: 'Robot', bg0: '#0b0e12', bg1: '#141a21', panel: 'rgba(24,31,39,.94)', panel2: 'rgba(15,20,26,.96)', text: '#d9f3e8', muted: '#7e948d', accent: '#39e6a3', accent2: '#ff8a3d', good: '#a7f26a', line: 'rgba(57,230,163,0.24)' },
@@ -975,6 +975,9 @@ function formatTime(seconds) {
 
 function setStatus(text) {
   els.statusText.textContent = text;
+  // The mascot animates only while something is playing, so the motion means
+  // something rather than running all day regardless.
+  document.body.classList.toggle('deck-playing', text === 'PLAY' || text === 'YT');
 }
 
 function currentSubtitleText() {
@@ -1713,7 +1716,43 @@ function applyStaticTheme(theme) {
   root.style.setProperty('--theme-art-opacity', String(theme.artOpacity ?? 0));
   root.style.setProperty('--theme-art-size', theme.artSize || 'auto 76%');
   root.style.setProperty('--theme-art-position', theme.artPosition || 'left center');
+  // The same illustration again, this time where it can be seen: over the
+  // centre panel rather than under the preview one. It sits behind the text,
+  // so it is carried a good deal stronger than the old ghost layer was.
+  const artOn = theme.art ? (theme.artPanelOpacity ?? Math.min(0.34, (theme.artOpacity ?? 0.2) * 1.25)) : 0;
+  root.style.setProperty('--theme-art-panel-opacity', String(artOn));
+  root.style.setProperty('--theme-art-panel-size', theme.artPanelSize || 'auto 150%');
+  root.style.setProperty('--theme-art-panel-position', theme.artPanelPosition || 'right -2% bottom -8%');
   document.body.classList.toggle('art-theme', !!theme.art);
+  // The mascot is a cut-out character that sits in the deck itself rather
+  // than a picture behind a panel. Themes without one simply do not get the
+  // element, so nothing is reserved for it.
+  // Both layers are real elements: ::before and ::after on the centre panel
+  // already belong to Blueprint's corner marks and CRT Phosphor's scanlines.
+  (function ensureThemeLayers() {
+    const panel = document.querySelector('.center-panel');
+    if (!panel) return;
+    if (!panel.querySelector(':scope > .theme-art-layer')) {
+      const art = document.createElement('div');
+      art.className = 'theme-art-layer';
+      art.setAttribute('aria-hidden', 'true');
+      panel.prepend(art);
+    }
+    // The mascot goes in the track row as a real flex item, between the title
+    // and the clock. Floating it over the panel put it on top of the clock on
+    // a short deck and on top of the title on a narrow one; as an item in the
+    // row, the layout gives it its own space and cannot overlap it.
+    const row = panel.querySelector('.track-row');
+    const stack = row && row.querySelector('.time-stack');
+    if (row && !row.querySelector(':scope > .theme-mascot')) {
+      const m = document.createElement('div');
+      m.className = 'theme-mascot';
+      m.setAttribute('aria-hidden', 'true');
+      row.insertBefore(m, stack || null);
+    }
+  })();
+  root.style.setProperty('--theme-mascot', theme.mascot ? 'url("' + theme.mascot + '")' : 'none');
+  document.body.classList.toggle('has-mascot', !!theme.mascot);
   // Custom theme background image layer (full image or repeating pattern)
   const custom = theme.custom;
   const bgImage = custom?.bgImage && custom?.bgMode !== 'none' ? custom.bgImage : '';
