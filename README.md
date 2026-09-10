@@ -47,6 +47,9 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   창이 작을 때는 빠집니다.
 - **테마 엠블럼**: 나머지 아트 테마 19종은 덱 전용으로 그린 모티프가 센터 패널에 들어갑니다(카세트·주크박스·해파리·먹글씨 등).
   갤러리 카드용 세로 일러스트를 잘라 쓰지 않고 따로 그려서 투명하게 딴 것이라, 어떤 크기에서도 잘리거나 비율이 틀어지지 않습니다.
+- **테마 재질(텍스처)**: 33개 테마에 반복 패턴이 깔립니다(모눈·하프톤·주사선·직조·종이결·동심원·별·셰브런·물방울·픽셀).
+  CSS로 그려지고 테마 색에서 색을 가져오므로, 가로로 긴 하단 독(2560×228)과 세로로 긴 좌우 독(366×900) 양쪽을 똑같이 채웁니다 —
+  래스터 이미지 한 장으로는 불가능한 부분입니다. 모티프도 가로에서는 여백 띠에, 세로에서는 패널 전체 워터마크로 배치가 바뀝니다.
 - **커스텀 테마 모드**: 테마 칩을 **우클릭**하면 에디터가 열립니다. 색상 5종을 고르고
   배경 이미지를 "채우기" 또는 "패턴 반복"으로 깔 수 있으며, 저장한 테마는 누적 보관되어
   테마 순환에 포함됩니다.
@@ -113,6 +116,10 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 - **Theme emblems**: the other nineteen art themes carry a motif drawn for the deck - a cassette, an arcade
   cabinet, a jellyfish, a sumi brushstroke. Drawn separately and cut to transparency rather than cropped out
   of the portrait gallery card, so nothing is ever clipped or squashed at any size.
+- **Theme material**: 33 themes carry a repeating texture - graph grid, halftone, scanlines, weave, paper
+  fibre, rings, stars, chevron, bubbles, pixels. Drawn in CSS from the theme's own colours, so it fills the
+  wide bottom dock (2560x228) and the tall side dock (366x900) equally well, which no single raster can. The
+  motif moves too: it takes the free band when the deck is wide and becomes a full-panel watermark when tall.
 - **Custom theme mode**: **Right-click** the theme chip to open the editor. Pick five base
   colors and optionally set a background image, either filled or repeated as a pattern.
   Saved themes accumulate and join the theme cycle.

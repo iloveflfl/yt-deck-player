@@ -3129,55 +3129,17 @@ body.is-narrow .progress-wrap { margin-left: 5px; margin-right: 5px; }
 .brand .theme-chip { flex: 0 1 auto; min-width: 0; }
 
 
-/* =========================================================================
- * Theme art you can actually see, and a mascot to go with it.
- *
- * The art layer was painted at 8,24 260x194 - which is exactly underneath the
- * preview panel at 9,31 333x190. Every themed illustration in the app was
- * being drawn behind an opaque panel: the gallery card showed a picture and
- * applying the theme showed none of it.
- *
- * Both layers are real elements rather than pseudo-elements, because
- * ::before and ::after on the centre panel are already spoken for - Blueprint
- * draws its corner marks with them and CRT Phosphor its scanlines - and
- * quietly winning that fight would have broken two themes to fix another.
- * ====================================================================== */
+
+/* The mascot: a transparent object rather than a background, so it is never
+   cropped and has no aspect ratio to reconcile with the panel's. */
 .center-panel { position: relative; }
-/* The panel's own children have to be positioned, or the layers below would
-   paint over the text. No offsets, so nothing moves. */
 .center-panel > .track-row,
 .center-panel > .progress-wrap,
 .center-panel > .control-row { position: relative; z-index: 1; }
+/* Same reason on the board: the texture and watermark sit behind the zones. */
+.chip-panel { position: relative; }
+.chip-panel > .chip-zone { position: relative; z-index: 1; }
 
-.theme-emblem,
-.theme-mascot {
-  position: absolute;
-  z-index: 0;
-  pointer-events: none;
-  background-repeat: no-repeat;
-  opacity: 0;
-  transition: opacity 300ms ease;
-}
-
-/* The illustration, carried as artwork behind the text. */
-.theme-emblem {
-  /* Measured, not guessed: the track title ends at 58% of the panel and the
-     mascot starts at 74% at every size that has room for both, so the emblem
-     takes the band between them and never sits behind the one string you have
-     to read. */
-  inset: 0 24% 0 59%;
-  background-image: var(--theme-emblem, none);
-  /* contain, because the artwork is a cut-out motif rather than a scene: the
-     whole of it fits whatever box it is given, at its own aspect, with nothing
-     cropped and no edge to notice. This is the entire reason the panel gets
-     its own asset instead of a slice of the gallery card. */
-  background-size: contain;
-  background-position: center;
-}
-body.has-emblem .theme-emblem { opacity: var(--theme-emblem-opacity, .3); }
-
-/* The character. It sits in the gap between the track title and the clock -
-   the one part of the centre panel with nothing in it at any width. */
 .theme-mascot {
   position: static;
   flex: 0 0 auto;
@@ -3187,25 +3149,14 @@ body.has-emblem .theme-emblem { opacity: var(--theme-emblem-opacity, .3); }
   width: clamp(34px, 5vw, 96px);
   min-height: 30px;
   background-image: var(--theme-mascot, none);
+  background-repeat: no-repeat;
   background-position: center bottom;
   background-size: contain;
+  opacity: 0;
+  transition: opacity 300ms ease;
   filter: drop-shadow(0 3px 6px rgba(0,0,0,.30));
 }
 body.has-mascot .theme-mascot { opacity: 1; }
-
-/* Small decks have no room to spare, and the character would be standing on
-   the controls rather than beside them. */
-/* At a side dock and any narrow deck the title runs to 74% and the clock
-   starts at 76%: there is no band to put it in, so it steps out. */
-body.is-mini .theme-emblem,
-body.is-slim .theme-emblem,
-body.is-narrow .theme-emblem { opacity: 0 !important; }
-@media (max-width: 1200px) {
-  .theme-emblem { opacity: 0 !important; }
-}
-@media (min-width: 1201px) {
-  body.has-emblem .center-panel .track-meta { max-width: 56%; }
-}
 /* Below these sizes the row has no width to give, and the character would be
    taking it from the track title. */
 body.is-mini .theme-mascot,
@@ -3249,3 +3200,162 @@ body:not(.deck-playing) .theme-mascot { animation-play-state: paused; }
    title is the one chosen for its paper-white panels, so the track count sat
    at 2.7:1 on that bar. It is the only place in the theme that reverses. */
 html body[data-theme="risopress"] .zone-head .muted { color: #b9b3a4; }
+
+/* =========================================================================
+ * What carries a theme across two orientations
+ *
+ * The deck is a wide strip at the bottom of a screen (2560x228) and a tall
+ * column at its side (366x900). One raster image cannot serve both: it has a
+ * fixed aspect, so in one of them it is always a fragment, and it has baked
+ * colours, so it cannot follow a palette. That is why the previous attempts
+ * kept failing on size, position and ratio at once - the asset was being asked
+ * to do a job assets cannot do.
+ *
+ * Every system that solves this properly solves it the same way. Material's
+ * dynamic colour takes a seed from an image and throws the pixels away. Apple
+ * ships materials and vector symbols and leaves rasters to content. Fluent
+ * blurs the wallpaper into a material rather than placing it. Spotify puts
+ * artwork in a fixed square and derives a gradient from it. The chrome is
+ * procedural; the raster is content.
+ *
+ * So identity here is carried, in order of how well each survives a change of
+ * shape:
+ *   1. colour tokens        - already the palette
+ *   2. material / texture   - a repeating pattern, drawn from the palette,
+ *                             which has no aspect ratio of its own
+ *   3. shape and type       - radii, borders, fonts, per theme
+ *   4. the motif            - one mark, painted as a STENCIL filled with a
+ *                             theme colour: no baked palette, no lettering to
+ *                             render wrong, scaled by contain so it is never
+ *                             cropped
+ *   5. the character        - the mascots, transparent objects, also contain
+ *
+ * Placement is stated per orientation rather than per pixel, so both docks are
+ * designed rather than one being an accident of the other.
+ * ====================================================================== */
+
+.theme-texture,
+.theme-watermark,
+.theme-emblem {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* --- 1. the material ---------------------------------------------------- */
+/* Nine primitives. Each is drawn in --theme-texture-ink, which is mixed from
+   the theme's own text colour, so a theme can never end up wearing someone
+   else's palette. They repeat, so orientation is simply not a question. */
+.theme-texture { opacity: var(--theme-texture-opacity, 1); }
+
+body[data-texture="grid"] .theme-texture {
+  background-image:
+    repeating-linear-gradient(0deg, var(--theme-texture-ink) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, var(--theme-texture-ink) 0 1px, transparent 1px 22px);
+}
+body[data-texture="dots"] .theme-texture {
+  background-image: radial-gradient(var(--theme-texture-ink) 1.1px, transparent 1.2px);
+  background-size: 9px 9px;
+}
+body[data-texture="scan"] .theme-texture {
+  background-image: repeating-linear-gradient(180deg, var(--theme-texture-ink) 0 1px, transparent 1px 3px);
+}
+body[data-texture="weave"] .theme-texture {
+  background-image:
+    repeating-linear-gradient(45deg, var(--theme-texture-ink) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, var(--theme-texture-ink) 0 1px, transparent 1px 7px);
+}
+body[data-texture="paper"] .theme-texture {
+  /* three offset dot fields at different scales read as fibre rather than as
+     a pattern, which is what stops paper looking like polka dots */
+  background-image:
+    radial-gradient(var(--theme-texture-ink) 0.6px, transparent 0.7px),
+    radial-gradient(var(--theme-texture-ink) 0.5px, transparent 0.6px),
+    radial-gradient(var(--theme-texture-ink) 0.7px, transparent 0.8px);
+  background-size: 13px 13px, 21px 21px, 31px 31px;
+  background-position: 0 0, 7px 11px, 17px 3px;
+}
+body[data-texture="rings"] .theme-texture {
+  background-image: repeating-radial-gradient(circle at 82% 50%, var(--theme-texture-ink) 0 1px, transparent 1px 9px);
+}
+body[data-texture="stars"] .theme-texture {
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, var(--theme-texture-ink), transparent 60%),
+    radial-gradient(1px 1px at 47% 68%, var(--theme-texture-ink), transparent 60%),
+    radial-gradient(1.4px 1.4px at 73% 31%, var(--theme-texture-ink), transparent 60%),
+    radial-gradient(1px 1px at 88% 77%, var(--theme-texture-ink), transparent 60%),
+    radial-gradient(1px 1px at 29% 88%, var(--theme-texture-ink), transparent 60%);
+  background-size: 190px 150px;
+}
+body[data-texture="chevron"] .theme-texture {
+  background-image: repeating-linear-gradient(135deg, var(--theme-texture-ink) 0 2px, transparent 2px 9px);
+}
+body[data-texture="bubble"] .theme-texture {
+  background-image:
+    radial-gradient(circle at 20% 30%, var(--theme-texture-ink) 0 3px, transparent 3.5px),
+    radial-gradient(circle at 68% 72%, var(--theme-texture-ink) 0 4px, transparent 4.5px),
+    radial-gradient(circle at 86% 24%, var(--theme-texture-ink) 0 2px, transparent 2.5px);
+  background-size: 120px 96px;
+}
+body[data-texture="pixel"] .theme-texture {
+  background-image:
+    repeating-linear-gradient(0deg, var(--theme-texture-ink) 0 2px, transparent 2px 8px),
+    repeating-linear-gradient(90deg, var(--theme-texture-ink) 0 2px, transparent 2px 8px);
+}
+body[data-texture="none"] .theme-texture { background-image: none; }
+
+/* --- 2. the motif ------------------------------------------------------- */
+/* Full colour, not a stencil. Flattening the motif to one colour solved the
+   palette question but destroyed the shapes whose meaning is inside their
+   outline - a cassette deck became a rectangle and a compass dial a circle.
+   The images are generated per theme in that theme's own colours, so they are
+   already members of the palette; contain is what keeps them whole. */
+.theme-emblem,
+.theme-watermark {
+  background-image: var(--theme-motif, none);
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Wide dock: the motif takes the band between the title, which ends at 58% of
+   the panel, and the mascot, which starts at 74%. Measured, not chosen. */
+.theme-emblem {
+  inset: 14% 24% 14% 59%;
+  background-position: center;
+}
+body.has-emblem .theme-emblem { opacity: var(--theme-emblem-opacity, .3); }
+
+/* Tall dock: there is no such band - the title runs to 66% and the clock
+   starts at 71% - but the board below it is 356x389 and its zones are all but
+   transparent. So the motif becomes a watermark behind the board, which is the
+   one surface that grows when the deck turns on its side. */
+.theme-watermark {
+  opacity: 0;
+  background-position: center 42%;
+  background-size: 62% auto;
+}
+body.is-dock-side.has-motif .theme-watermark { opacity: var(--theme-watermark-opacity, .16); }
+/* The board fills with chips, and a watermark behind them is a watermark
+   nobody sees. The centre panel is the surface that stays open in the tall
+   dock, so the same element that takes the free band when the deck is wide
+   spreads across the whole panel when it is tall. One motif, two rules. */
+body.is-dock-side .theme-emblem {
+  inset: 6%;
+  background-position: center;
+  background-size: contain;
+}
+body.is-dock-side.has-motif .theme-emblem { opacity: var(--theme-watermark-opacity, .16) !important; }
+
+/* Neither layer belongs on a deck too small to carry it. */
+body.is-mini .theme-texture,
+body.is-slim .theme-texture { opacity: .5; }
+body.is-mini .theme-emblem,
+body.is-slim .theme-emblem,
+body.is-narrow .theme-emblem { opacity: 0 !important; }
+@media (max-width: 1200px) {
+  .theme-emblem { opacity: 0 !important; }
+}
+@media (min-width: 1201px) {
+  body.has-emblem .center-panel .track-meta { max-width: 56%; }
+}
