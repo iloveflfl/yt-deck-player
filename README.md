@@ -44,7 +44,9 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   Adaptive 모드는 현재 곡 썸네일 색으로 테마를 만듭니다.
 - **테마 목록**: 테마 칩을 **클릭**하면 전체 테마를 미리보기 카드로 펼쳐 보고 바로 고를 수 있습니다.
 - **테마 마스코트**: 귀여운 테마 11종은 덱 안에 캐릭터가 서 있습니다. 재생 중에만 움직이며(떠다니기·통통·뒤뚱·깜빡임 등 테마마다 다름),
-  창이 작을 때는 빠집니다. 나머지 테마도 적용하면 테마 일러스트가 센터 패널에 실제로 비칩니다.
+  창이 작을 때는 빠집니다.
+- **테마 엠블럼**: 나머지 아트 테마 19종은 덱 전용으로 그린 모티프가 센터 패널에 들어갑니다(카세트·주크박스·해파리·먹글씨 등).
+  갤러리 카드용 세로 일러스트를 잘라 쓰지 않고 따로 그려서 투명하게 딴 것이라, 어떤 크기에서도 잘리거나 비율이 틀어지지 않습니다.
 - **커스텀 테마 모드**: 테마 칩을 **우클릭**하면 에디터가 열립니다. 색상 5종을 고르고
   배경 이미지를 "채우기" 또는 "패턴 반복"으로 깔 수 있으며, 저장한 테마는 누적 보관되어
   테마 순환에 포함됩니다.
@@ -107,7 +109,10 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
 - **Theme gallery**: **Click** the theme chip to see every theme as a preview card and pick one.
 - **Theme mascots**: eleven of the cute themes stand a character in the deck itself. It moves only while
   something is playing - floating, bobbing, waddling or flickering, depending on the theme - and steps out
-  when the window is small. Every other art theme now shows its illustration in the centre panel.
+  when the window is small.
+- **Theme emblems**: the other nineteen art themes carry a motif drawn for the deck - a cassette, an arcade
+  cabinet, a jellyfish, a sumi brushstroke. Drawn separately and cut to transparency rather than cropped out
+  of the portrait gallery card, so nothing is ever clipped or squashed at any size.
 - **Custom theme mode**: **Right-click** the theme chip to open the editor. Pick five base
   colors and optionally set a background image, either filled or repeated as a pattern.
   Saved themes accumulate and join the theme cycle.

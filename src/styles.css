@@ -3149,7 +3149,7 @@ body.is-narrow .progress-wrap { margin-left: 5px; margin-right: 5px; }
 .center-panel > .progress-wrap,
 .center-panel > .control-row { position: relative; z-index: 1; }
 
-.theme-art-layer,
+.theme-emblem,
 .theme-mascot {
   position: absolute;
   z-index: 0;
@@ -3160,17 +3160,21 @@ body.is-narrow .progress-wrap { margin-left: 5px; margin-right: 5px; }
 }
 
 /* The illustration, carried as artwork behind the text. */
-.theme-art-layer {
-  inset: 0;
-  background-image: var(--theme-art, none);
-  background-position: var(--theme-art-panel-position, right -2% bottom -10%);
-  background-size: var(--theme-art-panel-size, auto 155%);
-  /* Without this the illustration ends on a straight vertical edge partway
-     across the panel and reads as a pasted rectangle rather than as artwork. */
-  -webkit-mask-image: linear-gradient(to left, #000 34%, transparent 96%);
-  mask-image: linear-gradient(to left, #000 34%, transparent 96%);
+.theme-emblem {
+  /* Measured, not guessed: the track title ends at 58% of the panel and the
+     mascot starts at 74% at every size that has room for both, so the emblem
+     takes the band between them and never sits behind the one string you have
+     to read. */
+  inset: 0 24% 0 59%;
+  background-image: var(--theme-emblem, none);
+  /* contain, because the artwork is a cut-out motif rather than a scene: the
+     whole of it fits whatever box it is given, at its own aspect, with nothing
+     cropped and no edge to notice. This is the entire reason the panel gets
+     its own asset instead of a slice of the gallery card. */
+  background-size: contain;
+  background-position: center;
 }
-body.art-theme .theme-art-layer { opacity: var(--theme-art-panel-opacity, 0); }
+body.has-emblem .theme-emblem { opacity: var(--theme-emblem-opacity, .3); }
 
 /* The character. It sits in the gap between the track title and the clock -
    the one part of the centre panel with nothing in it at any width. */
@@ -3191,8 +3195,17 @@ body.has-mascot .theme-mascot { opacity: 1; }
 
 /* Small decks have no room to spare, and the character would be standing on
    the controls rather than beside them. */
-body.is-mini .theme-art-layer,
-body.is-slim .theme-art-layer { opacity: 0 !important; }
+/* At a side dock and any narrow deck the title runs to 74% and the clock
+   starts at 76%: there is no band to put it in, so it steps out. */
+body.is-mini .theme-emblem,
+body.is-slim .theme-emblem,
+body.is-narrow .theme-emblem { opacity: 0 !important; }
+@media (max-width: 1200px) {
+  .theme-emblem { opacity: 0 !important; }
+}
+@media (min-width: 1201px) {
+  body.has-emblem .center-panel .track-meta { max-width: 56%; }
+}
 /* Below these sizes the row has no width to give, and the character would be
    taking it from the track title. */
 body.is-mini .theme-mascot,
