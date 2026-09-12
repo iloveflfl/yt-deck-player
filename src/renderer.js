@@ -1727,7 +1727,7 @@ function applyStaticTheme(theme) {
   // The motif is painted as a stencil - the image supplies the shape and the
   // theme supplies the colour - so it can never clash with a palette, carries
   // no baked-in lettering to render wrong, and scales to any box.
-  const motif = theme.emblem || theme.mascot || null;
+  const motif = theme.emblem || null;
   root.style.setProperty('--theme-motif', motif ? 'url("' + motif + '")' : 'none');
   document.body.classList.toggle('has-motif', !!motif);
   root.style.setProperty('--theme-texture-ink', theme.textureInk || 'color-mix(in srgb, var(--text) 9%, transparent)');
@@ -2187,6 +2187,36 @@ function formatRate(rate) {
   return value.toFixed(1).replace(/\.0$/, '');
 }
 
+// --- Mascot tempo ---------------------------------------------------------
+// The character moves to the song it is playing, not to a stopwatch: every
+// track gets its own beat, stable across replays, and the motion follows the
+// speed control because a track played at 1.5x really is faster.
+//
+// This is a per-track tempo, not a detected one. The audio plays inside
+// YouTube's own player - an embed in one engine, a separate view in the other -
+// and a page cannot listen to either, so there is no beat here to detect. What
+// it can do is make sure two songs never move alike and that one song always
+// moves the same way.
+const MASCOT_BPM_MIN = 76;
+const MASCOT_BPM_SPAN = 57;          // 76-132, where most music actually sits
+function trackBeatSeconds(item) {
+  const id = String((item && item.videoId) || '');
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const bpm = MASCOT_BPM_MIN + (Math.abs(h) % MASCOT_BPM_SPAN);
+  const rate = clampSpeed(state.playback.playbackRate || 1) || 1;
+  return (60 / bpm) / rate;
+}
+function applyMascotTempo() {
+  try {
+    const beat = trackBeatSeconds(currentItem);
+    document.documentElement.style.setProperty('--mascot-beat', beat.toFixed(3) + 's');
+  } catch (e) {}
+}
+
 function clampSpeed(rate) {
   const value = Number(rate);
   if (!Number.isFinite(value)) return 1;
@@ -2321,6 +2351,7 @@ function animateProgressRewindThen(callback) {
 }
 
 function applyPlaybackRate() {
+  applyMascotTempo();
   if (ytMode) { ytSendCommand('rate', clampSpeed(state.playback.playbackRate || 1)); return; }
   if (!ready || !player?.setPlaybackRate) return;
   const rate = clampSpeed(state.playback.playbackRate || 1);
@@ -2649,6 +2680,7 @@ function playItem(item) {
   smoothProgress = { time: 0, duration: item.duration || 0, lastFrameAt: performance.now(), playing: false, rate: clampSpeed(state.playback.playbackRate || 1), correction: 0, correctionUntil: 0 };
   paintProgress(0, item.duration || 0);
   applyThemeForCurrentItem(true);
+  applyMascotTempo();
   setStatus('LOAD');
 
   if (item.type === 'track' && isGated(item)) {

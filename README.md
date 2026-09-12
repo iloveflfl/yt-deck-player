@@ -43,8 +43,10 @@ A frameless Electron "audio deck" for YouTube. Dock it to a screen edge, drop pl
   그리고 UI의 모양 자체가 바뀌는 특수 테마(Turntable·Terminal·Metro Line·Pixel Quest·Hologram·Newsprint)까지.
   Adaptive 모드는 현재 곡 썸네일 색으로 테마를 만듭니다.
 - **테마 목록**: 테마 칩을 **클릭**하면 전체 테마를 미리보기 카드로 펼쳐 보고 바로 고를 수 있습니다.
-- **테마 마스코트**: 귀여운 테마 11종은 덱 안에 캐릭터가 서 있습니다. 재생 중에만 움직이며(떠다니기·통통·뒤뚱·깜빡임 등 테마마다 다름),
-  창이 작을 때는 빠집니다.
+- **테마 마스코트**: 귀여운 테마 11종은 덱 안에 캐릭터가 서 있습니다. 하단 독·좌우 독 양쪽 모두에 나오고, 배경으로 중복해서 깔리지 않습니다.
+  재생 중에만 움직이며(떠다니기·통통·뒤뚱·깜빡임 등 테마마다 다름), 창이 작을 때는 빠집니다.
+- **곡별 박자**: 마스코트의 움직임 주기는 곡마다 다릅니다. 같은 곡은 항상 같은 박자로 움직이고, 배속을 올리면 그만큼 빨라집니다.
+  (유튜브 플레이어 내부 오디오는 페이지에서 들을 수 없어 실제 비트 검출은 아니고, 곡마다 고정된 템포입니다.)
 - **테마 엠블럼**: 나머지 아트 테마 19종은 덱 전용으로 그린 모티프가 센터 패널에 들어갑니다(카세트·주크박스·해파리·먹글씨 등).
   갤러리 카드용 세로 일러스트를 잘라 쓰지 않고 따로 그려서 투명하게 딴 것이라, 어떤 크기에서도 잘리거나 비율이 틀어지지 않습니다.
 - **테마 재질(텍스처)**: 33개 테마에 반복 패턴이 깔립니다(모눈·하프톤·주사선·직조·종이결·동심원·별·셰브런·물방울·픽셀).
@@ -110,9 +112,12 @@ npm.cmd run dist:win # 포터블 exe + NSIS 설치마법사 빌드 (dist/)
   Metro Line, Pixel Quest, Hologram, Newsprint).
   Adaptive derives a palette from the current track's thumbnail.
 - **Theme gallery**: **Click** the theme chip to see every theme as a preview card and pick one.
-- **Theme mascots**: eleven of the cute themes stand a character in the deck itself. It moves only while
-  something is playing - floating, bobbing, waddling or flickering, depending on the theme - and steps out
-  when the window is small.
+- **Theme mascots**: eleven of the cute themes stand a character in the deck itself, in both the bottom and
+  side docks, and never also as wallpaper behind it. It moves only while something is playing - floating,
+  bobbing, waddling or flickering, depending on the theme - and steps out when the window is small.
+- **A beat per track**: the mascot's cycle is timed to the song. Two tracks never move alike, one track always
+  moves the same way, and the speed control moves it too. (A per-track tempo, not a detected one: the audio
+  plays inside YouTube's own player, which a page cannot listen to.)
 - **Theme emblems**: the other nineteen art themes carry a motif drawn for the deck - a cassette, an arcade
   cabinet, a jellyfish, a sumi brushstroke. Drawn separately and cut to transparency rather than cropped out
   of the portrait gallery card, so nothing is ever clipped or squashed at any size.

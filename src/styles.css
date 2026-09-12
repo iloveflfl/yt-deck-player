@@ -3163,7 +3163,19 @@ body.is-mini .theme-mascot,
 body.is-slim .theme-mascot,
 body.is-low .theme-mascot,
 body.is-narrow .theme-mascot { display: none; }
+body.is-dock-side .theme-mascot {
+  display: block;
+  width: clamp(28px, 11vw, 46px);
+  min-height: 26px;
+}
+body.is-dock-side .center-panel .track-meta { max-width: 58%; }
 
+/* Durations below are beat counts rather than seconds. --mascot-beat is one
+   beat of the track that is playing, so two songs never move alike, one song
+   always moves the same way, and the motion divides by the speed control
+   because a track at 1.5x really is faster. It is a per-track tempo, not a
+   detected one: the audio lives inside YouTube's player and a page cannot
+   listen to it. See trackBeatSeconds in renderer.js. */
 /* --- the animations ---------------------------------------------------- */
 /* Each moves the way the thing it is would move, and all of them are slow on
    purpose: this is a deck left running while someone works, and something
@@ -3176,17 +3188,17 @@ body.is-narrow .theme-mascot { display: none; }
 @keyframes mascot-drift   { 0%,100% { transform: translateX(0); }               50% { transform: translateX(-7px); } }
 @keyframes mascot-hop     { 0%,64%,100% { transform: translateY(0); }           72% { transform: translateY(-8px); } 80% { transform: translateY(0); } }
 
-body[data-theme="astrocat"]     .theme-mascot { animation: mascot-float 6.5s ease-in-out infinite; }
-body[data-theme="cozyyarn"]     .theme-mascot { animation: mascot-bob 5.5s ease-in-out infinite; }
-body[data-theme="bakery"]       .theme-mascot { animation: mascot-squish 4.5s ease-in-out infinite; transform-origin: 50% 100%; }
-body[data-theme="stickerdiary"] .theme-mascot { animation: mascot-waddle 6s ease-in-out infinite; transform-origin: 50% 100%; }
-body[data-theme="hologram"]     .theme-mascot { animation: mascot-flicker 4s steps(1, end) infinite; }
-body[data-theme="pixelquest"]   .theme-mascot { animation: mascot-hop 5s steps(8, end) infinite; image-rendering: pixelated; }
-body[data-theme="mochi"]        .theme-mascot { animation: mascot-squish 5s ease-in-out infinite; transform-origin: 50% 100%; }
-body[data-theme="boba"]         .theme-mascot { animation: mascot-bob 6s ease-in-out infinite; }
-body[data-theme="penguin"]      .theme-mascot { animation: mascot-waddle 5s ease-in-out infinite; transform-origin: 50% 100%; }
-body[data-theme="cloudsoda"]    .theme-mascot { animation: mascot-drift 9s ease-in-out infinite; }
-body[data-theme="velvetkuro"]   .theme-mascot { animation: mascot-float 5.5s ease-in-out infinite; }
+body[data-theme="astrocat"]     .theme-mascot { animation: mascot-float calc(var(--mascot-beat, 0.55s) * 8) ease-in-out infinite; }
+body[data-theme="cozyyarn"]     .theme-mascot { animation: mascot-bob calc(var(--mascot-beat, 0.55s) * 4) ease-in-out infinite; }
+body[data-theme="bakery"]       .theme-mascot { animation: mascot-squish calc(var(--mascot-beat, 0.55s) * 4) ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="stickerdiary"] .theme-mascot { animation: mascot-waddle calc(var(--mascot-beat, 0.55s) * 4) ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="hologram"]     .theme-mascot { animation: mascot-flicker calc(var(--mascot-beat, 0.55s) * 8) steps(1, end) infinite; }
+body[data-theme="pixelquest"]   .theme-mascot { animation: mascot-hop calc(var(--mascot-beat, 0.55s) * 8) steps(8, end) infinite; image-rendering: pixelated; }
+body[data-theme="mochi"]        .theme-mascot { animation: mascot-squish calc(var(--mascot-beat, 0.55s) * 4) ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="boba"]         .theme-mascot { animation: mascot-bob calc(var(--mascot-beat, 0.55s) * 6) ease-in-out infinite; }
+body[data-theme="penguin"]      .theme-mascot { animation: mascot-waddle calc(var(--mascot-beat, 0.55s) * 4) ease-in-out infinite; transform-origin: 50% 100%; }
+body[data-theme="cloudsoda"]    .theme-mascot { animation: mascot-drift calc(var(--mascot-beat, 0.55s) * 12) ease-in-out infinite; }
+body[data-theme="velvetkuro"]   .theme-mascot { animation: mascot-float calc(var(--mascot-beat, 0.55s) * 8) ease-in-out infinite; }
 
 /* A stopped deck has a still mascot: the motion is what says "this is on". */
 body:not(.deck-playing) .theme-mascot { animation-play-state: paused; }
